@@ -1,0 +1,45 @@
+{
+  "user": "maheshrijal",
+  "site": {
+    "url": "https://oss.mrjl.dev",
+    "noindex": true,
+    "title": "Mahesh Rijal — Open-source contributions",
+    "links": {
+      "GitHub": "https://github.com/maheshrijal",
+      "Website": "https://mrjl.dev",
+      "Blog": "https://maheshrijal.com"
+    }
+  },
+  "sort": "stars",
+  "priority": [
+    "amd/gaia",
+    "pipe-cd/pipecd",
+    "open-telemetry/opentelemetry-kotlin",
+    "apache/druid",
+    "meta/astryx",
+    "kubernetes/website",
+    "docker/docs",
+    "prometheus/docs",
+    "helm/helm-www",
+    "openai/codex"
+  ],
+  "exclude": ["kutumbtech/*"],
+  "minStars": 100,
+  "excludePRs": [
+    "https://github.com/wesbos/awesome-uses/pull/1802",
+    "https://github.com/wesbos/awesome-uses/pull/1828",
+    "https://github.com/opentofu/manifesto/pull/49",
+    "https://github.com/opentofu/manifesto/pull/60",
+    "https://github.com/opentofu/manifesto/pull/162",
+    "https://github.com/opentofu/manifesto/pull/687",
+    "https://github.com/kubernetes-sigs/gateway-api/pull/3976",
+    "https://github.com/microsoft/windows-drivers-rs/pull/8",
+    "https://github.com/satnaing/astro-paper/pull/35",
+    "https://github.com/madrilene/eleventy-excellent/pull/53",
+    "https://github.com/opentofu/opentofu/pull/331",
+    "https://github.com/opentofu/opentofu/pull/448",
+    "https://github.com/apache/brpc/pull/2122",
+    "https://github.com/open-sauced/hot/pull/485",
+    "https://github.com/yokoffing/NextDNS-Config/pull/41"
+  ]
+}

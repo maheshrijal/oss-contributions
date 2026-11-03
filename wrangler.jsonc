@@ -1,0 +1,11 @@
+{
+  // Static site only: Cloudflare serves dist/ directly, no Worker code runs.
+  "name": "oss-mrjl-dev",
+  "compatibility_date": "2026-11-04",
+  "assets": { "directory": "./dist" },
+  // Cloudflare creates and owns the DNS record for this custom domain.
+  "routes": [{ "pattern": "oss.mrjl.dev", "custom_domain": true }],
+  // Only serve on oss.mrjl.dev, so search engines don't index duplicate URLs.
+  "workers_dev": false,
+  "preview_urls": false
+}
