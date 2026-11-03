@@ -10,6 +10,7 @@
       "Blog": "https://maheshrijal.com"
     }
   },
+  "chart": false,
   "sort": "stars",
   "priority": [
     "amd/gaia",

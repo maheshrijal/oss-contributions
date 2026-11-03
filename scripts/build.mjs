@@ -67,7 +67,6 @@ const repos = [...repoMap.values()].sort(
 // ---------- numbers ----------
 
 const totalStars = repos.reduce((s, r) => s + r.stargazerCount, 0);
-const linesChanged = prs.reduce((s, p) => s + p.additions + p.deletions, 0);
 
 // ---------- helpers ----------
 
@@ -77,17 +76,15 @@ const esc = (s = "") =>
 const compact = (n) =>
   n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}k` : String(n);
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const monthYear = (iso) => {
-  const d = new Date(iso);
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-};
+const monthFmt = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const monthYear = (date) => monthFmt.format(new Date(date));
 
 const icons = {
   merged: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z"/></svg>`,
   star: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>`,
   sun: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm5.657-8.157a.75.75 0 0 1 0 1.061l-1.061 1.06a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.06-1.06a.75.75 0 0 1 1.06 0Zm-9.193 9.193a.75.75 0 0 1 0 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061a.75.75 0 0 1 1.061 0ZM8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0ZM3 8a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 3 8Zm13 0a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8Zm-8 5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 13Zm3.536-1.464a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 0 1-1.06 1.061l-1.061-1.06a.75.75 0 0 1 0-1.061ZM2.343 2.343a.75.75 0 0 1 1.061 0l1.06 1.061a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-1.06-1.06a.75.75 0 0 1 0-1.06Z"/></svg>`,
   moon: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z"/></svg>`,
+  github: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>`,
   arrow: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.53 11.78a.75.75 0 0 1-1.06-1.06l6.22-6.22H5.75a.75.75 0 0 1 0-1.5h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V5.31l-6.22 6.22Z"/></svg>`,
 };
 const sprite = `<svg width="0" height="0" style="position:absolute">${Object.entries(icons)
@@ -95,20 +92,78 @@ const sprite = `<svg width="0" height="0" style="position:absolute">${Object.ent
   .join("")}</svg>`;
 const icon = (k) => `<svg aria-hidden="true"><use href="#i-${k}"/></svg>`;
 
+// ---------- activity chart (merged PRs per month) ----------
+
+function activityChart() {
+  if (!prs.length) return "";
+  const first = new Date(prs.reduce((m, p) => (p.mergedAt < m ? p.mergedAt : m), prs[0].mergedAt));
+  const now = new Date(fetchedAt);
+  const months = [];
+  for (
+    let y = first.getUTCFullYear(), m = first.getUTCMonth();
+    y < now.getUTCFullYear() || (y === now.getUTCFullYear() && m <= now.getUTCMonth());
+    m === 11 ? (y++, (m = 0)) : m++
+  ) {
+    months.push({ y, m, n: 0 });
+  }
+  // Show at least a year so a short history still reads as a timeline.
+  while (months.length < 12) {
+    const { y, m } = months[0];
+    months.unshift({ y: m === 0 ? y - 1 : y, m: m === 0 ? 11 : m - 1, n: 0 });
+  }
+  const idx = new Map(months.map((d, i) => [`${d.y}-${d.m}`, i]));
+  for (const p of prs) {
+    const d = new Date(p.mergedAt);
+    months[idx.get(`${d.getUTCFullYear()}-${d.getUTCMonth()}`)].n++;
+  }
+
+  const max = Math.max(...months.map((d) => d.n));
+  const step = max <= 4 ? 1 : max <= 10 ? 2 : Math.ceil(max / 5);
+  const top = Math.ceil(max / step) * step;
+
+  let ticks = "";
+  for (let v = 0; v <= top; v += step) {
+    ticks += `<span class="${v === 0 ? "tick base" : "tick"}" style="--y:${v / top}"><i>${v}</i></span>`;
+  }
+  const bars = months
+    .map((d) => {
+      const text = `${monthYear(Date.UTC(d.y, d.m, 1))}: ${d.n} merged`;
+      const bar = d.n ? `<span class="bar" style="--h:${d.n / top}"></span>` : "";
+      return `<li data-tip="${text}">${bar}<span class="sr">${text}</span></li>`;
+    })
+    .join("");
+  // Label each January with its year, plus the first month when it isn't close to a January.
+  const labels = months
+    .map((d, i) => {
+      if (d.m === 0) return `<span style="--c:${i + 1}">${d.y}</span>`;
+      if (i === 0 && d.m < 10) return `<span style="--c:1">${monthYear(Date.UTC(d.y, d.m, 1))}</span>`;
+      return "";
+    })
+    .join("");
+
+  return `
+      <figure class="chart">
+        <div class="plot">
+          ${ticks}
+          <ol class="bars" style="--cols:${months.length}">${bars}</ol>
+        </div>
+        <div class="x" style="--cols:${months.length}" aria-hidden="true">${labels}</div>
+        <div class="tooltip" aria-hidden="true"></div>
+      </figure>`;
+}
+
 // ---------- page ----------
 
-const prRow = (pr) => {
-  return `
+const prRow = (pr) => `
           <li class="pr">
             <span class="state" title="Merged">${icon("merged")}<span class="sr">Merged</span></span>
             <a class="pr-title" href="${esc(pr.url)}" target="_blank" rel="noopener">${esc(pr.title)}</a>
             <span class="pr-meta">
-              <span class="mono">#${pr.number}</span>
+              <span>#${pr.number}</span>
               <span>${monthYear(pr.mergedAt)}</span>
-              <span class="mono diff"><span class="add">+${compact(pr.additions)}</span> <span class="del">−${compact(pr.deletions)}</span></span>
+              <span class="diff"><span class="add">+${compact(pr.additions)}</span> <span class="del">−${compact(pr.deletions)}</span></span>
             </span>
           </li>`;
-};
 
 const repoRow = (r, i) => {
   const [owner, name] = r.nameWithOwner.split("/");
@@ -117,12 +172,12 @@ const repoRow = (r, i) => {
     : "";
   return `
       <li class="repo" data-featured="${i}" data-stars="${r.stargazerCount}" data-recent="${r.prs[0].mergedAt}" data-prs="${r.prs.length}">
-        <span class="rank mono">${String(i + 1).padStart(2, "0")}</span>
-        <img class="owner" src="${esc(r.owner.avatarUrl)}&s=80" alt="" width="36" height="36" loading="lazy">
+        <span class="rank" aria-hidden="true">${i + 1}</span>
+        <img class="owner" src="${esc(r.owner.avatarUrl)}&s=72" alt="" width="36" height="36" loading="lazy">
         <div class="repo-body">
           <div class="repo-head">
-            <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
-            <span class="repo-meta">${lang}<span class="stars">${icon("star")}${compact(r.stargazerCount)}</span></span>
+            <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
+            <span class="repo-meta">${lang}<span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(r.stargazerCount)}</span></span>
           </div>
           ${r.description ? `<p class="desc">${esc(r.description)}</p>` : ""}
           <ul class="prs">${r.prs.map(prRow).join("")}
@@ -167,6 +222,33 @@ const links = Object.entries(config.site?.links ?? { GitHub: profile.html_url })
   .map(([label, href]) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}${icon("arrow")}</a>`)
   .join("");
 
+// Dark theme colours, used by both the system-setting rule and the toggle.
+const DARK = {
+  "color-scheme": "dark",
+  "--show-sun": "block",
+  "--show-moon": "none",
+  "--page": "#0b0b0a",
+  "--surface": "#131312",
+  "--ink": "#f0efec",
+  "--ink-2": "#c3c2b7",
+  "--ink-3": "#898781",
+  "--line": "rgba(255, 255, 255, 0.08)",
+  "--line-strong": "#383835",
+  "--grid": "#2c2c2a",
+  "--hover": "rgba(255, 255, 255, 0.03)",
+  "--series": "#3987e5",
+  "--merged": "#0ca30c",
+  "--add": "#3fb950",
+  "--del": "#f07171",
+};
+const darkVars = (selector, close) =>
+  `${selector} {\n${Object.entries(DARK).map(([k, v]) => `  ${k}: ${v};`).join("\n")}\n}${close ? `\n${close}` : ""}`;
+
+// Fallback for the footer time; the page swaps in the visitor's time zone.
+const utcStamp = new Intl.DateTimeFormat("en-US", {
+  year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC", timeZoneName: "short",
+}).format(new Date(fetchedAt));
+
 const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -200,218 +282,276 @@ ${siteUrl ? `<meta property="og:url" content="${esc(siteUrl)}">\n` : ""}<meta pr
   --surface: #ffffff;
   --ink: #0b0b0b;
   --ink-2: #52514e;
-  --ink-3: #898781;
+  --ink-3: #6f6e69;
   --line: rgba(11, 11, 11, 0.08);
   --line-strong: #c3c2b7;
+  --grid: #e1e0d9;
   --hover: rgba(11, 11, 11, 0.03);
+  --series: #2a78d6;
   --merged: #0ca30c;
   --add: #006300;
   --del: #b42d2d;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --show-sun: block;
-    --show-moon: none;
-    --page: #0b0b0a;
-    --surface: #131312;
-    --ink: #f0efec;
-    --ink-2: #c3c2b7;
-    --ink-3: #898781;
-    --line: rgba(255, 255, 255, 0.08);
-    --line-strong: #383835;
-    --hover: rgba(255, 255, 255, 0.03);
-    --merged: #0ca30c;
-    --add: #3fb950;
-    --del: #f07171;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --show-sun: block;
-  --show-moon: none;
-  --page: #0b0b0a;
-  --surface: #131312;
-  --ink: #f0efec;
-  --ink-2: #c3c2b7;
-  --ink-3: #898781;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: #383835;
-  --hover: rgba(255, 255, 255, 0.03);
-  --merged: #0ca30c;
-  --add: #3fb950;
-  --del: #f07171;
-}
+${darkVars("@media (prefers-color-scheme: dark) {\n  :root:not([data-theme=\"light\"])", "}")}
+${darkVars(":root[data-theme=\"dark\"]", "")}
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; text-decoration: none; }
-.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.86em; }
+a, button { touch-action: manipulation; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
 .muted { color: var(--ink-3); }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 svg { fill: currentColor; }
+
+.skip { position: absolute; left: 16px; top: -48px; padding: 8px 12px; border-radius: 8px; background: var(--ink); color: var(--page); font-size: 14px; }
+.skip:focus { top: 16px; }
 
 .wrap { max-width: 880px; margin: 0 auto; padding: 56px 24px 80px; }
 
-header { display: flex; align-items: center; gap: 14px; }
-header img { width: 44px; height: 44px; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
-header .who { flex: 1; min-width: 0; }
-header h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-header p { margin: 0; color: var(--ink-3); font-size: 14px; }
+.top { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; column-gap: 14px; }
+.top img { border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.top h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.top p { margin: 0; color: var(--ink-3); font-size: 14px; }
 nav { display: flex; gap: 18px; font-size: 14px; color: var(--ink-2); }
-nav a { display: inline-flex; align-items: center; gap: 2px; transition: color .15s; }
+nav a { display: inline-flex; align-items: center; gap: 2px; padding: 4px 0; transition: color .15s; }
 nav a:hover { color: var(--ink); }
 nav svg { width: 14px; height: 14px; opacity: .6; }
 .theme {
-  display: grid; place-items: center; width: 32px; height: 32px; margin-left: 4px; padding: 0;
-  border: 0; border-radius: 8px; background: none; color: var(--ink-3); cursor: pointer; transition: color .15s, background .15s;
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: var(--ink-3); cursor: pointer; transition: color .15s, background-color .15s;
 }
 .theme:hover { color: var(--ink); background: var(--hover); }
 .theme svg { width: 16px; height: 16px; }
 .theme .sun { display: var(--show-sun); }
 .theme .moon { display: var(--show-moon); }
 
-.hero { margin: 72px 0 40px; }
-.hero .num { font-size: clamp(64px, 12vw, 104px); line-height: .9; font-weight: 650; letter-spacing: -0.045em; }
-.hero h2 { margin: 14px 0 0; font-size: clamp(22px, 3.4vw, 30px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.25; color: var(--ink-2); max-width: 22ch; }
-.hero h2 b { color: var(--ink); font-weight: 600; }
-
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.stat { padding: 18px 0 18px 20px; border-left: 1px solid var(--line); }
-.stat:first-child { border-left: 0; padding-left: 0; }
-.stat .v { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
-.stat .k { font-size: 13px; color: var(--ink-3); }
+.hero { margin: 72px 0 0; font-variant-numeric: normal; }
+.hero .num { margin: 0; font-size: clamp(64px, 12vw, 104px); line-height: .9; font-weight: 650; letter-spacing: -0.045em; }
+.hero .lede { margin: 14px 0 0; font-size: clamp(22px, 3.4vw, 30px); font-weight: 500; letter-spacing: -0.025em; line-height: 1.25; color: var(--ink-2); max-width: 24ch; text-wrap: balance; }
+.hero .lede b { color: var(--ink); font-weight: 600; }
 
 section { margin-top: 64px; }
-.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.section-head h3 { margin: 0; font-size: 13px; font-weight: 500; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
+h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 18px; }
 
+.chart { position: relative; margin: 18px 0 0; }
+.plot { position: relative; height: 160px; margin-left: 28px; }
+.tick { position: absolute; left: 0; right: 0; bottom: calc(var(--y) * 100%); border-top: 1px solid var(--grid); }
+.tick.base { border-top-color: var(--line-strong); }
+.tick i { position: absolute; right: calc(100% + 8px); top: -8px; font-style: normal; font-size: 11px; line-height: 16px; color: var(--ink-3); }
+.bars { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--cols), 1fr); list-style: none; margin: 0; padding: 0; }
+.bars li { position: relative; display: flex; align-items: flex-end; justify-content: center; }
+.bar { width: min(24px, 70%); height: calc(var(--h) * 100%); border-radius: 4px 4px 0 0; background: var(--series); transition: opacity .15s; }
+.bars:hover .bar { opacity: .45; }
+.bars li:hover .bar { opacity: 1; }
+.x { display: grid; grid-template-columns: repeat(var(--cols), 1fr); margin: 8px 0 0 28px; font-size: 11px; color: var(--ink-3); }
+.x span { grid-column: var(--c); grid-row: 1; justify-self: center; white-space: nowrap; }
+.x span:first-child { justify-self: start; }
+.tooltip {
+  position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; transform: translate(-50%, calc(-100% - 8px));
+  padding: 5px 9px; border-radius: 6px; background: var(--ink); color: var(--page); font-size: 12px; font-weight: 500; white-space: nowrap; transition: opacity .12s;
+}
+.tooltip.show { opacity: 1; }
 
+.sorter { display: flex; align-items: center; gap: 10px; }
+.sort-label { font-size: 13px; color: var(--ink-3); }
 .sort { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
 .sort button {
-  font: inherit; font-size: 13px; color: var(--ink-3); background: none; border: 0; cursor: pointer;
-  padding: 4px 12px; border-radius: 6px; transition: color .15s, background .15s;
+  font: inherit; font-size: 13px; color: var(--ink-3); background: none; border: 0; cursor: pointer; white-space: nowrap;
+  padding: 5px 12px; border-radius: 6px; transition: color .15s, background-color .15s;
 }
 .sort button:hover { color: var(--ink); }
-.sort button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.sort button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+
 .repos { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
-.repo { display: grid; grid-template-columns: 28px 36px 1fr; gap: 0 16px; padding: 22px 0; border-bottom: 1px solid var(--line); }
-.rank { color: var(--ink-3); padding-top: 8px; font-variant-numeric: tabular-nums; }
+.repo { display: grid; grid-template-columns: 24px 36px minmax(0, 1fr); gap: 0 16px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+.rank { color: var(--ink-3); font-size: 13px; padding-top: 9px; }
 .owner { border-radius: 8px; box-shadow: 0 0 0 1px var(--line); background: var(--surface); }
 .repo-body { min-width: 0; }
-.repo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.repo-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.repo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
+.repo-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .repo-name:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
-.repo-meta { display: inline-flex; gap: 14px; font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.repo-meta { display: inline-flex; gap: 14px; font-size: 13px; color: var(--ink-3); }
 .lang, .stars { display: inline-flex; align-items: center; gap: 6px; }
 .lang i { width: 8px; height: 8px; border-radius: 50%; }
 .stars svg { width: 13px; height: 13px; }
 .desc { margin: 2px 0 0; font-size: 14px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .prs { list-style: none; margin: 12px 0 0; padding: 0; }
-.pr { display: grid; grid-template-columns: 16px 1fr auto; align-items: baseline; gap: 10px; padding: 7px 10px; margin: 0 -10px; border-radius: 8px; transition: background .15s; }
+.pr { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 7px 10px; margin: 0 -10px; border-radius: 8px; transition: background-color .15s; }
 .pr:hover { background: var(--hover); }
-.state { display: inline-flex; align-self: center; }
-.state { color: var(--merged); }
+.state { display: inline-flex; align-self: center; color: var(--merged); }
 .state svg { width: 16px; height: 16px; }
-.pr-title { font-size: 14px; color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .15s; }
+.pr-title { font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .15s; }
 .pr:hover .pr-title { color: var(--ink); }
-.pr-meta { display: inline-flex; gap: 14px; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pr-meta { display: inline-flex; gap: 14px; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
 .diff { min-width: 9ch; text-align: right; }
 .add { color: var(--add); } .del { color: var(--del); }
 
-footer { margin-top: 56px; font-size: 13px; color: var(--ink-3); }
+footer {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
+  margin-top: 40px; font-size: 13px; color: var(--ink-3);
+}
+footer p { margin: 0; }
+footer time { color: var(--ink-2); }
+.source { display: inline-flex; align-items: center; gap: 6px; transition: color .15s; }
+.source:hover { color: var(--ink); }
+.source svg { width: 14px; height: 14px; }
 
 @media (max-width: 640px) {
-  .wrap { padding-top: 32px; }
-  header nav { display: none; }
+  .wrap { padding-top: 28px; }
+  .top { grid-template-columns: 44px minmax(0, 1fr) auto; row-gap: 10px; }
+  nav { grid-column: 2 / -1; grid-row: 2; gap: 20px; }
+  .theme { grid-column: 3; grid-row: 1; margin-right: -8px; }
   .hero { margin-top: 48px; }
-  .repo { grid-template-columns: 36px 1fr; }
+  .plot { height: 140px; }
+  .sorter { width: 100%; }
+  .sort { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); }
+  .sort button { padding: 6px 4px; }
+  .repo { grid-template-columns: 36px minmax(0, 1fr); }
   .rank { display: none; }
-  .pr { grid-template-columns: 16px 1fr; }
+  .pr { grid-template-columns: 16px minmax(0, 1fr); }
   .pr-title { white-space: normal; }
   .pr-meta { grid-column: 2; }
   .diff { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, .tooltip { transition: none !important; }
 }
 </style>
 </head>
 <body>
 ${sprite}
+<a class="skip" href="#main">Skip to content</a>
 <div class="wrap">
-  <header>
-    <img src="${esc(profile.avatar_url)}&s=96" alt="">
+  <header class="top">
+    <img src="${esc(profile.avatar_url)}&s=88" alt="" width="44" height="44" fetchpriority="high">
     <div class="who">
       <h1>${esc(name)}</h1>
       ${profile.bio ? `<p>${esc(profile.bio)}</p>` : ""}
     </div>
-    <nav>${links}</nav>
-    <button class="theme" type="button" aria-label="Toggle light and dark theme" title="Toggle theme">
+    <nav aria-label="Profiles">${links}</nav>
+    <button class="theme" type="button" aria-label="Switch between light and dark theme" title="Switch theme">
       <svg class="sun" aria-hidden="true"><use href="#i-sun"/></svg>
       <svg class="moon" aria-hidden="true"><use href="#i-moon"/></svg>
     </button>
   </header>
 
-  <div class="hero">
-    <div class="num">${prs.length}</div>
-    <h2>merged pull requests to <b>${repos.length} open-source projects</b> with ${compact(totalStars)} stars between them.</h2>
-  </div>
+  <main id="main">
+    <section class="hero">
+      <p class="num">${prs.length}</p>
+      <p class="lede">merged pull requests to <b>${repos.length} open-source projects</b> with ${compact(totalStars)} stars between them.</p>
+    </section>
 
-  <div class="stats">
-    <div class="stat"><div class="v">${prs.length}</div><div class="k">Merged</div></div>
-    <div class="stat"><div class="v">${repos.length}</div><div class="k">Projects</div></div>
-    <div class="stat"><div class="v">${compact(linesChanged)}</div><div class="k">Lines changed</div></div>
-  </div>
-
-
-  <section>
-    <div class="section-head">
-      <h3>Projects</h3>
-      <div class="sort" role="group" aria-label="Sort projects">
-        <button type="button" data-sort="featured" aria-pressed="true">Featured</button>
-        <button type="button" data-sort="stars" aria-pressed="false">Stars</button>
-        <button type="button" data-sort="recent" aria-pressed="false">Recent</button>
-        <button type="button" data-sort="prs" aria-pressed="false">Most PRs</button>
+${config.chart === false ? "" : `    <section aria-labelledby="activity">
+      <h2 id="activity">Merged per month</h2>
+      ${activityChart()}
+    </section>
+`}
+    <section aria-labelledby="projects">
+      <div class="section-head">
+        <h2 id="projects">Projects</h2>
+        <div class="sorter">
+          <span class="sort-label" id="sort-label">Sort by</span>
+          <div class="sort" role="group" aria-labelledby="sort-label">
+            <button type="button" data-sort="featured" aria-pressed="true">Featured</button>
+            <button type="button" data-sort="stars" aria-pressed="false">Stars</button>
+            <button type="button" data-sort="recent" aria-pressed="false">Recent</button>
+            <button type="button" data-sort="prs" aria-pressed="false">Most PRs</button>
+          </div>
+        </div>
       </div>
-    </div>
-    <ol class="repos">${repos.map(repoRow).join("")}
-    </ol>
-  </section>
+      <ol class="repos">${repos.map(repoRow).join("")}
+      </ol>
+    </section>
+  </main>
 
-  <footer>Updated <time datetime="${fetchedAt}">${new Date(fetchedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</time> · Data from GitHub</footer>
+  <footer>
+    <p>Updated <time datetime="${fetchedAt}">${utcStamp}</time></p>
+    <a class="source" href="${esc(profile.html_url)}" target="_blank" rel="noopener">${icon("github")}Data from GitHub</a>
+  </footer>
 </div>
 <script>
-// Sort
+// Sort, kept in the URL (?sort=stars) so a sorted view can be shared.
 const list = document.querySelector(".repos");
-const sortButtons = document.querySelectorAll(".sort button");
+const sortButtons = [...document.querySelectorAll(".sort button")];
 const by = {
   featured: (a, b) => a.dataset.featured - b.dataset.featured,
   stars: (a, b) => b.dataset.stars - a.dataset.stars,
   recent: (a, b) => b.dataset.recent.localeCompare(a.dataset.recent),
   prs: (a, b) => b.dataset.prs - a.dataset.prs || by.stars(a, b),
 };
-sortButtons.forEach((btn) => btn.addEventListener("click", () => {
-  sortButtons.forEach((b) => b.setAttribute("aria-pressed", b === btn));
-  const rows = [...list.children].sort(by[btn.dataset.sort]);
-  rows.forEach((row, i) => {
-    row.querySelector(".rank").textContent = String(i + 1).padStart(2, "0");
+function sortBy(key) {
+  sortButtons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.sort === key));
+  [...list.children].sort(by[key]).forEach((row, i) => {
+    row.querySelector(".rank").textContent = i + 1;
     list.append(row);
   });
+}
+sortButtons.forEach((btn) => btn.addEventListener("click", () => {
+  const key = btn.dataset.sort;
+  sortBy(key);
+  const url = new URL(location.href);
+  if (key === "featured") url.searchParams.delete("sort"); else url.searchParams.set("sort", key);
+  history.replaceState(null, "", url);
 }));
+const initial = new URLSearchParams(location.search).get("sort");
+if (by[initial]) sortBy(initial);
 
-// Theme
+// Chart tooltip
+const chart = document.querySelector(".chart");
+if (chart) {
+  const tip = chart.querySelector(".tooltip");
+  const bars = chart.querySelector(".bars");
+  const show = (li) => {
+    const box = chart.getBoundingClientRect();
+    const r = li.getBoundingClientRect();
+    const bar = li.querySelector(".bar");
+    const top = bar ? bar.getBoundingClientRect().top : r.bottom;
+    tip.textContent = li.dataset.tip;
+    // Keep the tooltip inside the chart near either edge.
+    const half = tip.offsetWidth / 2;
+    const x = r.left - box.left + r.width / 2;
+    tip.style.left = Math.min(Math.max(x, half), box.width - half) + "px";
+    tip.style.top = top - box.top + "px";
+    tip.classList.add("show");
+  };
+  bars.querySelectorAll("li").forEach((li) => {
+    li.addEventListener("pointerenter", () => show(li));
+    li.addEventListener("pointerdown", () => show(li));
+  });
+  bars.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") tip.classList.remove("show"); });
+  document.addEventListener("pointerdown", (e) => { if (!bars.contains(e.target)) tip.classList.remove("show"); });
+}
+
+// Last update, shown in the visitor's own time zone.
+const time = document.querySelector("footer time");
+const opts = { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+const updated = new Date(time.dateTime);
+time.textContent = new Intl.DateTimeFormat(undefined, opts).format(updated);
+// Hovering shows the time zone.
+time.title = new Intl.DateTimeFormat(undefined, { ...opts, timeZoneName: "long" }).format(updated);
+
+// Theme toggle; keeps the browser bar colour in step.
+const root = document.documentElement;
+const syncThemeColor = () => {
+  const bg = getComputedStyle(document.body).backgroundColor;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute("content", bg));
+};
+if (root.dataset.theme) syncThemeColor();
 document.querySelector(".theme").addEventListener("click", () => {
-  const root = document.documentElement;
-  const dark = root.dataset.theme
-    ? root.dataset.theme === "dark"
-    : matchMedia("(prefers-color-scheme: dark)").matches;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset.theme = dark ? "light" : "dark";
   try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+  syncThemeColor();
 });
 </script>
 </body>

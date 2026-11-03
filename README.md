@@ -20,6 +20,7 @@ npm run build   # write dist/index.html
 | Key | What it does |
 |---|---|
 | `user` | GitHub username |
+| `chart` | Show the "merged per month" chart. On unless set to `false` |
 | `sort` | How to order repos not in `priority`: `stars` (default), `recent`, `prs`, `lines`, `name` |
 | `priority` | Repos to pin at the top, in this order, e.g. `["apache/druid", "kubernetes/website"]` |
 | `exclude` | Repos to hide. `"org/*"` hides a whole org |
