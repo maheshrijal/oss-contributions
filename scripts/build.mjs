@@ -67,6 +67,9 @@ const repos = [...repoMap.values()].sort(
 // ---------- numbers ----------
 
 const totalStars = repos.reduce((s, r) => s + r.stargazerCount, 0);
+// The page content only changes when a newly shown PR is merged, so search
+// engines get that date rather than the build time.
+const contentUpdated = prs.reduce((m, p) => (p.mergedAt > m ? p.mergedAt : m), "") || fetchedAt;
 
 // ---------- helpers ----------
 
@@ -208,7 +211,7 @@ const jsonLd = {
   name: title,
   description,
   ...(siteUrl && { url: siteUrl }),
-  dateModified: fetchedAt,
+  dateModified: contentUpdated,
   mainEntity: {
     "@type": "Person",
     name,
@@ -567,7 +570,7 @@ if (siteUrl) {
   );
   writeFileSync(
     "dist/sitemap.xml",
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}</loc><lastmod>${fetchedAt.slice(0, 10)}</lastmod></url>\n</urlset>\n`,
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}</loc><lastmod>${contentUpdated.slice(0, 10)}</lastmod></url>\n</urlset>\n`,
   );
 }
 console.log(`Built dist/index.html — ${repos.length} projects, ${prs.length} PRs`);
