@@ -41,7 +41,9 @@ Hosted on Cloudflare at https://oss.mrjl.dev as a static-assets Worker (`wrangle
 
 `.github/workflows/deploy.yml` fetches fresh data, builds and deploys on push to `main`, every 8 hours, and on manual runs. It needs two repo secrets:
 
-- `CLOUDFLARE_API_TOKEN`: account permission "Workers Scripts: Edit", zone permissions for `mrjl.dev` "Workers Routes: Edit" and "DNS: Edit" (for the custom domain).
+- `CLOUDFLARE_API_TOKEN`: scoped to the `oss-mrjl-dev` Worker only, with Workers → Editor.
 - `CLOUDFLARE_ACCOUNT_ID`
+
+The workflow only uploads and releases new content. It doesn't touch the custom domain or other settings, which the Editor token can't change. If you change `routes`, `workers_dev` or `preview_urls` in `wrangler.jsonc`, apply them once from your machine with `npx wrangler deploy`.
 
 Cloudflare creates and owns the `oss.mrjl.dev` DNS record, like other Worker custom domains, so it is not in the OpenTofu DNS repo.

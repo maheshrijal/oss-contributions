@@ -26,7 +26,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - run: node scripts/build.mjs
-      - run: npx --yes wrangler@4.157.0 deploy
+      # Upload and release new content only. Routes and the custom domain are
+      # left alone, so the token only needs Editor on this one Worker.
+      # To change them, edit wrangler.jsonc and run `wrangler deploy` locally.
+      - name: Deploy
+        run: |
+          out=$(npx --yes wrangler@4.157.0 versions upload)
+          echo "$out"
+          id=$(echo "$out" | sed -n 's/^Worker Version ID: //p')
+          test -n "$id"
+          npx --yes wrangler@4.157.0 versions deploy "$id@100%" --yes
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
