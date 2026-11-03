@@ -2,7 +2,7 @@
   "user": "maheshrijal",
   "site": {
     "url": "https://oss.mrjl.dev",
-    "noindex": true,
+    "noindex": false,
     "title": "Mahesh Rijal — Open-source contributions",
     "links": {
       "GitHub": "https://github.com/maheshrijal",
