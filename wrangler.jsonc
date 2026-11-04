@@ -10,5 +10,7 @@
   "routes": [{ "pattern": "oss.mrjl.dev", "custom_domain": true }],
   // Only serve on oss.mrjl.dev, so search engines don't index duplicate URLs.
   "workers_dev": false,
-  "preview_urls": false
+  "preview_urls": false,
+  // Workers Logs: requests that reach the Worker (/check), with status and timing.
+  "observability": { "enabled": true }
 }
