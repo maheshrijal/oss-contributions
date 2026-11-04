@@ -1,5 +1,5 @@
 // Reads config.json + data/prs.json and writes dist/index.html.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from "node:fs";
 
 const config = JSON.parse(readFileSync("config.json", "utf8"));
 const { fetchedAt, profile, prs: allPrs } = JSON.parse(readFileSync("data/prs.json", "utf8"));
@@ -193,6 +193,8 @@ const name = profile.name ?? profile.login;
 const siteUrl = config.site?.url?.replace(/\/?$/, "/");
 // While the site is private, tell search engines to stay away.
 const noindex = config.site?.noindex === true;
+// Link-preview card from scripts/og.mjs; falls back to the avatar.
+const ogImage = siteUrl && existsSync("static/og.png") ? `${siteUrl}og.png` : null;
 const title = config.site?.title ?? `${name} — Open-source contributions`;
 
 // Description: name the top repos, staying under ~160 characters.
@@ -268,12 +270,14 @@ ${siteUrl ? `<link rel="canonical" href="${esc(siteUrl)}">\n` : ""}<link rel="ic
 <meta property="og:type" content="profile">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
-${siteUrl ? `<meta property="og:url" content="${esc(siteUrl)}">\n` : ""}<meta property="og:image" content="${esc(profile.avatar_url)}">
-<meta property="profile:username" content="${esc(profile.login)}">
-<meta name="twitter:card" content="summary">
+${siteUrl ? `<meta property="og:url" content="${esc(siteUrl)}">\n` : ""}<meta property="og:image" content="${esc(ogImage ?? profile.avatar_url)}">
+${ogImage ? `<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${esc(title)}">\n` : ""}<meta property="profile:username" content="${esc(profile.login)}">
+<meta name="twitter:card" content="${ogImage ? "summary_large_image" : "summary"}">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
-<meta name="twitter:image" content="${esc(profile.avatar_url)}">
+<meta name="twitter:image" content="${esc(ogImage ?? profile.avatar_url)}">
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>
 <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <style>
@@ -563,6 +567,7 @@ document.querySelector(".theme").addEventListener("click", () => {
 
 mkdirSync("dist", { recursive: true });
 writeFileSync("dist/index.html", html);
+if (ogImage) copyFileSync("static/og.png", "dist/og.png");
 if (siteUrl) {
   writeFileSync(
     "dist/robots.txt",

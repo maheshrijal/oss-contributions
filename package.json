@@ -5,6 +5,7 @@
   "scripts": {
     "fetch": "node scripts/fetch.mjs",
     "build": "node scripts/build.mjs",
+    "og": "node scripts/og.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:all": "ALL=1 node scripts/dev.mjs"
   }

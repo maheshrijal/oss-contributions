@@ -7,6 +7,7 @@ A one-page static site that lists Mahesh's merged pull requests to open-source p
 - `config.json`: everything the owner tunes (sort, priority, exclusions, links).
 - `scripts/fetch.mjs`: pulls PRs from GitHub with the `gh` CLI into `data/prs.json`.
 - `scripts/build.mjs`: reads config and data, writes `dist/index.html` (HTML, CSS and JS in one file).
+- `scripts/og.mjs`: renders the link-preview image `static/og.png` with local Chrome. Run by hand and commit the PNG.
 - `scripts/dev.mjs`: local server on port 3000 that rebuilds and reloads on changes.
 - `wrangler.jsonc`: Cloudflare config; serves `dist/` at https://oss.mrjl.dev.
 - `.github/workflows/deploy.yml`: fetches, builds and deploys on push to `main` and every 8 hours.
@@ -19,6 +20,7 @@ A one-page static site that lists Mahesh's merged pull requests to open-source p
 npm run dev     # serve http://localhost:3000 with auto-reload
 npm run fetch   # refresh data/prs.json from GitHub
 npm run build   # write dist/index.html
+npm run og      # re-render static/og.png (after changing name, title or top of priority)
 ```
 
 ## What the page shows

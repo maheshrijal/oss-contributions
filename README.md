@@ -13,6 +13,7 @@ npm run dev     # local server on http://localhost:3000, reloads on changes
 npm run dev:all # same, but shows every merged PR (ignores excludePRs and minStars)
 npm run fetch   # pull fresh data from GitHub into data/prs.json
 npm run build   # write dist/index.html
+npm run og      # re-render static/og.png, the link-preview image (needs Chrome)
 ```
 
 ## config.json
