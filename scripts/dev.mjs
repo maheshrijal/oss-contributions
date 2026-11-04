@@ -1,5 +1,5 @@
 // Local dev server: builds the site, serves dist/, and reloads the browser
-// when config.json, data/ or scripts/build.mjs change.
+// when config.json, data/, scripts/build.mjs or src/render.js change.
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, watch } from "node:fs";
@@ -24,7 +24,7 @@ const onChange = () => {
   clearTimeout(timer);
   timer = setTimeout(build, 100);
 };
-for (const path of ["config.json", "data", "scripts/build.mjs"]) watch(path, onChange);
+for (const path of ["config.json", "data", "scripts/build.mjs", "src/render.js"]) watch(path, onChange);
 
 const reloadScript = `<script>new EventSource("/__reload").onmessage = () => location.reload();</script>`;
 

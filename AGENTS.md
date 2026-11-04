@@ -7,6 +7,8 @@ A one-page static site that lists Mahesh's merged pull requests to open-source p
 - `config.json`: everything the owner tunes (sort, priority, exclusions, links).
 - `scripts/fetch.mjs`: pulls PRs from GitHub with the `gh` CLI into `data/prs.json`.
 - `scripts/build.mjs`: reads config and data, writes `dist/index.html` (HTML, CSS and JS in one file).
+- `src/render.js`: draws the page; shared by the build and the Worker.
+- `src/worker.js`: serves `/check` and `/check/<username>` (any user's merged PRs, live from GitHub). Not linked from the main page.
 - `scripts/og.mjs`: renders the link-preview image `static/og.png` with local Chrome. Run by hand and commit the PNG.
 - `scripts/dev.mjs`: local server on port 3000 that rebuilds and reloads on changes.
 - `wrangler.jsonc`: Cloudflare config; serves `dist/` at https://oss.mrjl.dev.
@@ -53,5 +55,5 @@ Ordering: strong code work goes in `priority` at the top; small docs fixes go be
 - No dependencies. Plain Node (20+) and the `gh` CLI only.
 - Keep the output a single static HTML file. No frameworks, no client-side data fetching.
 - Design: minimal, sharp, light and dark themes (follows the system setting; the header toggle overrides it and is saved in `localStorage`), system font. Keep the look consistent with what's there.
-- After changing `build.mjs`, run `npm run build` and look at the page at desktop and phone widths.
+- After changing `build.mjs` or `src/render.js`, run `npm run build` and look at the page at desktop and phone widths.
 - Don't commit, push or change GitHub settings unless asked.

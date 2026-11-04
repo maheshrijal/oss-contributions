@@ -39,7 +39,7 @@ This order is the page's default "Featured" view. Visitors can also sort the lis
 
 ## Deploy
 
-Hosted on Cloudflare at https://oss.mrjl.dev as a static-assets Worker (`wrangler.jsonc`).
+Hosted on Cloudflare at https://oss.mrjl.dev as a Worker (`wrangler.jsonc`). The main page and other files in `dist/` are served as static files; the Worker code only runs for `/check`.
 
 `.github/workflows/deploy.yml` fetches fresh data, builds and deploys on push to `main`, every 8 hours, and on manual runs. It needs two repo secrets:
 
@@ -47,5 +47,18 @@ Hosted on Cloudflare at https://oss.mrjl.dev as a static-assets Worker (`wrangle
 - `CLOUDFLARE_ACCOUNT_ID`
 
 The workflow only uploads and releases new content. It doesn't touch the custom domain or other settings, which the Editor token can't change. If you change `routes`, `workers_dev` or `preview_urls` in `wrangler.jsonc`, apply them once from your machine with `npx wrangler deploy`.
+
+## /check
+
+`/check` is a form that shows the merged PRs of any GitHub user, at `/check/<username>`. It is handled by the Worker in `src/worker.js` and drawn by `src/render.js`, the same code that draws the main page. Nothing links to it and it isn't indexed.
+
+- It needs a `GITHUB_TOKEN` Worker secret: a fine-grained GitHub token with read-only access to public repositories. Set it with `npx wrangler versions secret put GITHUB_TOKEN`.
+- Each user's page is cached for an hour. Users with many PRs take a while the first time; GitHub search caps results at 1,000.
+- To try it locally:
+
+  ```bash
+  npm run build
+  GITHUB_TOKEN=$(gh auth token) CLOUDFLARE_INCLUDE_PROCESS_ENV=true npx wrangler dev
+  ```
 
 Cloudflare creates and owns the `oss.mrjl.dev` DNS record, like other Worker custom domains, so it is not in the OpenTofu DNS repo.

@@ -1,7 +1,10 @@
 {
-  // Static site only: Cloudflare serves dist/ directly, no Worker code runs.
+  // Static files from dist/ are served directly; the Worker only runs for other paths.
   "name": "oss-mrjl-dev",
   "compatibility_date": "2026-11-04",
+  // Handles /check only; every other path is a static file from dist/.
+  // Needs the GITHUB_TOKEN secret (a read-only token for public repos).
+  "main": "src/worker.js",
   "assets": { "directory": "./dist" },
   // Cloudflare creates and owns the DNS record for this custom domain.
   "routes": [{ "pattern": "oss.mrjl.dev", "custom_domain": true }],
