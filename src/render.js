@@ -519,7 +519,10 @@ const repoLine = finder.querySelector(".current-repo");
 const notifyButton = finder.querySelector(".notify");
 const live = finder.querySelector("[role=status]");
 const errorLine = finder.querySelector(".error");
-const goLabel = finder.querySelector(".go .label");
+const go = finder.querySelector(".go");
+const goLabel = go.querySelector(".label");
+// A disabled default button also stops Enter from restarting the check.
+go.disabled = true;
 const user = input.value;
 const originalHeading = heading.textContent;
 const pointerFine = matchMedia("(pointer: fine)").matches;
@@ -569,9 +572,10 @@ const onProgress = (e) => {
   document.title = number(e.found) + "/" + number(e.total) + " " + user;
 };
 
-// Only when the tab is out of view: if it's in view, the page itself is the news.
+// Only when they're away: otherwise the page itself is the news.
+const away = () => document.hidden || !document.hasFocus();
 const tell = (title, body) => {
-  if (!armed || !document.hidden) return false;
+  if (!armed || !away()) return false;
   try {
     const note = new Notification(title, { body, icon: avatarUrl || undefined, tag: location.pathname });
     note.onclick = () => { focus(); note.close(); };
@@ -584,7 +588,7 @@ const tell = (title, body) => {
 const onDone = () => {
   ended = true;
   cancelAnimationFrame(frame);
-  const summary = target ? "Found " + number(target) + " " + prsWord(target) : "No merged pull requests found";
+  const summary = !named ? "Results ready" : target ? "Found " + number(target) + " " + prsWord(target) : "No merged pull requests found";
   count.textContent = summary;
   live.textContent = summary + ". Opening the results.";
   meter.classList.remove("searching");
@@ -596,7 +600,9 @@ const onDone = () => {
   const hold = stillMotion ? 0 : 250;
   // A notification's click needs this page still open, so wait until they come back.
   if (tell(user + " is ready", summary + ".")) {
-    addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(open, hold); });
+    const back = () => { if (!away()) setTimeout(open, hold); };
+    addEventListener("visibilitychange", back);
+    addEventListener("focus", back);
   } else {
     setTimeout(open, hold);
   }
@@ -605,6 +611,7 @@ const onDone = () => {
 const onError = (e) => {
   ended = true;
   cancelAnimationFrame(frame);
+  go.disabled = false;
   const when = e.resetAt && new Date(e.resetAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const message = when ? "This site has reached GitHub’s hourly limit. Try again after " + when + "." : e.message;
   errorLine.textContent = message;
@@ -618,6 +625,7 @@ const onError = (e) => {
     heading.textContent = originalHeading;
     heading.classList.remove("who");
     input.setAttribute("aria-invalid", "true");
+    input.setAttribute("aria-describedby", "error");
   } else {
     finder.dataset.state = "failed";
     goLabel.textContent = "Try again";
@@ -631,7 +639,7 @@ const onError = (e) => {
   tell("Couldn’t finish checking " + user, message);
   if (!pointerFine) return;
   if (e.missing) { input.focus(); input.select(); }
-  else finder.querySelector(".go").focus();
+  else go.focus();
 };
 
 const handle = (event) => {
