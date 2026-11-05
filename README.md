@@ -52,6 +52,10 @@ The workflow only uploads and releases new content. It doesn't touch the custom 
 
 `/check` is a form that shows the merged PRs of any GitHub user, at `/check/<username>`. It is handled by the Worker in `src/worker.js` and drawn by `src/render.js`, the same code that draws the main page. Nothing links to it and it isn't indexed.
 
+While a result loads, the page shows live progress from `/check/<username>/stream`, one JSON line per page of PRs, then opens the finished page from the cache. On desktop it offers a browser notification during long waits; the tab must stay open. Without JavaScript, the page falls back to `?wait=1`, which returns the whole result at once.
+
+If GitHub's hourly limit runs out, visitors see when to try again. The remaining count only goes to Workers Logs, as `github_rate_limit_remaining`.
+
 - It needs a `GITHUB_TOKEN` Worker secret: a fine-grained GitHub token with read-only access to public repositories. Set it with `npx wrangler versions secret put GITHUB_TOKEN`.
 - Each user's page is cached for an hour. Users with many PRs take a while the first time; GitHub search caps results at 1,000.
 - To try it locally:

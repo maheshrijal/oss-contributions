@@ -417,10 +417,38 @@ form[aria-busy="true"] .spin { display: block; }
 .field input::placeholder { color: var(--line-strong); }
 .finder .go { font-size: 16px; padding: 12px 20px; border-radius: 10px; }
 .finder .go .spin { width: 15px; height: 15px; }
-.status, .error, .hint { margin: 16px 0 0; font-size: 14px; }
-.hint, .status { color: var(--ink-3); }
-.status:empty { display: none; }
+.error, .hint { margin: 16px 0 0; font-size: 14px; }
+.hint { color: var(--ink-3); }
 .error { color: var(--del); }
+
+/* While a result loads, the line under the username is the progress bar. */
+.field { position: relative; }
+.meter { position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; overflow: hidden; }
+.meter .fill { display: block; width: 0; height: 100%; background: var(--merged); transition: width .6s cubic-bezier(.2, .7, .2, 1); }
+.meter.searching .fill { width: 22%; transition: none; animation: scan 1.2s ease-in-out infinite alternate; }
+.meter.failed .fill { background: var(--del); }
+@keyframes scan { to { transform: translateX(354.5%); } }
+.finder[data-state="loading"] .go { display: none; }
+.finder[data-state="loading"] form { grid-template-columns: minmax(0, 1fr); }
+/* Shrink long names so the whole username stays visible. */
+.finder[data-state] .field { font-size: min(clamp(30px, 5.6vw, 52px), calc(min(100vw - 48px, 832px) * 1.9 / var(--chars, 1))); }
+.finder[data-state] .hint, .finder[data-state] .examples { display: none; }
+.finder:not([data-state="loading"]) .progress { display: none; }
+.finder h1.who { display: flex; align-items: center; gap: 12px; animation: appear .25s ease-out; }
+.finder h1 img { flex: none; width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+@keyframes appear { from { opacity: 0; } }
+.progress-line { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 20px; margin-top: 14px; font-size: 15px; }
+.count { margin: 0; font-variant-numeric: tabular-nums; }
+.notify {
+  padding: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 14px; color: var(--ink-2); white-space: nowrap;
+  text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; transition: color .15s;
+}
+.notify:hover { color: var(--ink); }
+.notify[aria-disabled="true"] { color: var(--ink-3); cursor: default; text-decoration: none; }
+.current-repo { min-height: 1.5em; margin: 4px 0 0; font-size: 14px; color: var(--ink-3); }
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+}
 .examples { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; margin: 48px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--ink-3); }
 .examples li { display: flex; align-items: center; }
 .examples a { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); transition: color .15s; }
@@ -433,30 +461,33 @@ form[aria-busy="true"] .spin { display: block; }
   .finder { margin-top: 64px; }
   .finder form { grid-template-columns: 1fr; }
   .finder .go { width: 100%; }
+  .finder[data-state="loading"] h1 { display: flex; align-items: flex-end; min-height: 2.5em; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; border-right-color: currentColor; opacity: .5; }
+  .meter .fill { transition: none; }
+  .meter.searching .fill { width: 100%; opacity: .4; animation: none; }
+  .finder h1.who { animation: none; }
 }
 `;
 
-// Shows a spinner while the next page loads; GitHub can take a while for busy accounts.
-const CHECK_SCRIPT = `// /check: loading state while GitHub is searched.
+// Shows a spinner until the next page starts to load.
+const CHECK_SCRIPT = `// /check: busy state after submitting.
 const busy = (form, user) => {
   const button = form.querySelector(".go");
   const input = form.querySelector("input");
-  const status = document.querySelector(".status");
   form.setAttribute("aria-busy", "true");
   button.disabled = true;
   button.querySelector(".label").textContent = "Checking…";
   input.readOnly = true;
   if (user) input.value = user;
-  if (status) {
-    status.textContent = "Searching GitHub for " + input.value + "’s merged pull requests…";
-    setTimeout(() => {
-      status.textContent = "Still searching. Accounts with lots of pull requests can take a minute.";
-    }, 6000);
-  }
 };
+// ?wait=1 is only how the page got here; keep it out of the address bar.
+if (new URLSearchParams(location.search).has("wait")) {
+  const clean = new URL(location);
+  clean.searchParams.delete("wait");
+  history.replaceState(null, "", clean);
+}
 document.querySelectorAll("form.lookup").forEach((form) =>
   form.addEventListener("submit", () => busy(form)),
 );
@@ -470,10 +501,178 @@ document.querySelectorAll("a[data-user]").forEach((a) =>
 addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 // Focus the field on desktop only, so phones don't open the keyboard unasked.
 const field = document.querySelector(".finder input");
-if (field && matchMedia("(pointer: fine)").matches) {
+if (field && !field.readOnly && matchMedia("(pointer: fine)").matches) {
   field.focus();
   if (field.value) field.select();
 }
+`;
+
+// Runs on the page shown while a result loads: follows the Worker's progress, then opens the result.
+const LOADING_SCRIPT = `// /check/<user>: live progress.
+const finder = document.querySelector(".finder");
+const input = finder.querySelector("input");
+const heading = finder.querySelector("h1");
+const meter = finder.querySelector(".meter");
+const fill = meter.firstElementChild;
+const count = finder.querySelector(".count");
+const repoLine = finder.querySelector(".current-repo");
+const notifyButton = finder.querySelector(".notify");
+const live = finder.querySelector("[role=status]");
+const errorLine = finder.querySelector(".error");
+const goLabel = finder.querySelector(".go .label");
+const user = input.value;
+const originalHeading = heading.textContent;
+const pointerFine = matchMedia("(pointer: fine)").matches;
+const stillMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const number = (n) => n.toLocaleString("en-US");
+const prsWord = (n) => "merged pull request" + (n === 1 ? "" : "s");
+let shown = 0, target = 0, totalPrs = 0, frame = 0, named = false, armed = false, ended = false, avatarUrl = "";
+
+const drawCount = (n) => { count.textContent = "Found " + number(n) + " of " + number(totalPrs) + " " + prsWord(totalPrs); };
+
+// The number eases between real values, and never ahead of what has been found.
+const showCount = (to) => {
+  cancelAnimationFrame(frame);
+  if (stillMotion) { shown = to; drawCount(to); return; }
+  const from = shown;
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / 500);
+    shown = Math.round(from + (to - from) * (1 - Math.pow(1 - t, 3)));
+    drawCount(shown);
+    if (t < 1) frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+};
+
+const onProgress = (e) => {
+  if (!named) {
+    named = true;
+    avatarUrl = e.avatar + "&s=64";
+    const img = new Image(32, 32);
+    img.src = avatarUrl;
+    img.alt = "";
+    const name = document.createElement("span");
+    name.textContent = e.name;
+    heading.replaceChildren(img, name);
+    heading.classList.add("who");
+    live.textContent = "Checking " + number(e.total) + " " + prsWord(e.total) + " by " + e.name + ".";
+  }
+  meter.classList.remove("searching");
+  meter.setAttribute("aria-valuemax", e.total);
+  meter.setAttribute("aria-valuenow", e.found);
+  fill.style.width = (e.total ? (e.found / e.total) * 100 : 100) + "%";
+  totalPrs = e.total;
+  target = e.found;
+  showCount(e.found);
+  repoLine.textContent = e.repo ?? "";
+  document.title = number(e.found) + "/" + number(e.total) + " " + user;
+};
+
+// Only when the tab is out of view: if it's in view, the page itself is the news.
+const tell = (title, body) => {
+  if (!armed || !document.hidden) return false;
+  try {
+    const note = new Notification(title, { body, icon: avatarUrl || undefined, tag: location.pathname });
+    note.onclick = () => { focus(); note.close(); };
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const onDone = () => {
+  ended = true;
+  cancelAnimationFrame(frame);
+  const summary = target ? "Found " + number(target) + " " + prsWord(target) : "No merged pull requests found";
+  count.textContent = summary;
+  live.textContent = summary + ". Opening the results.";
+  meter.classList.remove("searching");
+  fill.style.width = "100%";
+  repoLine.textContent = "";
+  notifyButton.hidden = true;
+  document.title = "Done: " + user;
+  const open = () => location.replace(location.pathname + "?wait=1");
+  const hold = stillMotion ? 0 : 250;
+  // A notification's click needs this page still open, so wait until they come back.
+  if (tell(user + " is ready", summary + ".")) {
+    addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(open, hold); });
+  } else {
+    setTimeout(open, hold);
+  }
+};
+
+const onError = (e) => {
+  ended = true;
+  cancelAnimationFrame(frame);
+  const when = e.resetAt && new Date(e.resetAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const message = when ? "This site has reached GitHub’s hourly limit. Try again after " + when + "." : e.message;
+  errorLine.textContent = message;
+  errorLine.hidden = false;
+  input.readOnly = false;
+  meter.classList.remove("searching");
+  document.title = "Check open-source contributions";
+  if (e.missing) {
+    delete finder.dataset.state;
+    meter.hidden = true;
+    heading.textContent = originalHeading;
+    heading.classList.remove("who");
+    input.setAttribute("aria-invalid", "true");
+  } else {
+    finder.dataset.state = "failed";
+    goLabel.textContent = "Try again";
+    if (target) meter.classList.add("failed");
+    else meter.hidden = true;
+    input.addEventListener("input", () => {
+      goLabel.textContent = "Check";
+      meter.hidden = true;
+    }, { once: true });
+  }
+  tell("Couldn’t finish checking " + user, message);
+  if (!pointerFine) return;
+  if (e.missing) { input.focus(); input.select(); }
+  else finder.querySelector(".go").focus();
+};
+
+const handle = (event) => {
+  if (event.type === "progress") onProgress(event);
+  else if (event.type === "done") onDone();
+  else if (event.type === "error") onError(event);
+};
+
+// Offer this only on long waits, and only where notifications work without an installed app.
+setTimeout(() => {
+  if (ended || !pointerFine || !("Notification" in window) || Notification.permission === "denied") return;
+  notifyButton.hidden = false;
+}, 6000);
+notifyButton.addEventListener("click", async () => {
+  if (notifyButton.getAttribute("aria-disabled") === "true") return;
+  const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+  if (permission === "default") return;
+  armed = permission === "granted";
+  notifyButton.textContent = armed ? "You’ll get a notification" : "Notifications are blocked in this browser";
+  notifyButton.setAttribute("aria-disabled", "true");
+  live.textContent = notifyButton.textContent + ".";
+});
+
+addEventListener("pagehide", () => { ended = true; });
+(async () => {
+  try {
+    const res = await fetch(finder.dataset.stream);
+    if (!res.ok || !res.body) throw new Error(res.status);
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const lines = buffer.split(String.fromCharCode(10));
+      buffer = lines.pop();
+      lines.forEach((line) => handle(JSON.parse(line)));
+    }
+  } catch {}
+  if (!ended) onError({ message: "Lost the connection before the check finished." });
+})();
 `;
 
 
@@ -719,27 +918,37 @@ const barForm = (value) => `<form class="lookup" action="/check" method="get" ro
 const EXAMPLES = ["rauchg", "kelseyhightower", "tj"];
 
 // The form page; also used for "not found" and other errors.
-export function checkPage({ user = "", error = "" } = {}) {
-  const head = `<title>Check open-source contributions</title>
+// opts.loading: the same page while that user's PRs are fetched, with live progress.
+export function checkPage({ user = "", error = "", loading = false } = {}) {
+  const path = `/check/${encodeURIComponent(user)}`;
+  const head = `<title>${loading ? `Checking ${esc(user)}` : "Check open-source contributions"}</title>
 <meta name="description" content="See the merged pull requests any GitHub user has made to open-source projects they don't own.">
 <meta name="robots" content="noindex">
-<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icons.merged.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" fill="#0ca30c" `))}">`;
+${loading ? `<noscript><meta http-equiv="refresh" content="0; url=${esc(path)}?wait=1"></noscript>\n` : ""}<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icons.merged.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" fill="#0ca30c" `))}">`;
   const body = `  <header class="home">
     <a href="/check">Check contributions</a>
     ${THEME_BUTTON}
   </header>
 
-  <main id="main" class="finder">
+  <main id="main" class="finder"${loading ? ` data-state="loading" data-stream="${esc(path)}/stream"` : ""}>
     <h1>See anyone’s open-source contributions</h1>
     <form class="lookup" action="/check" method="get" role="search">
-      <label class="field">
+      <label class="field"${loading ? ` style="--chars:${11 + user.length}"` : ""}>
         <span>github.com/</span>
-        <input ${inputAttrs} value="${esc(user)}" placeholder="username…" aria-label="GitHub username"${error ? ` aria-invalid="true" aria-describedby="error"` : ""}>
+        <input ${inputAttrs} value="${esc(user)}" placeholder="username…" aria-label="GitHub username"${error ? ` aria-invalid="true" aria-describedby="error"` : ""}${loading ? " readonly" : ""}>
+        ${loading ? `<span class="meter searching" role="progressbar" aria-label="Pull requests found"><span class="fill"></span></span>` : ""}
       </label>
       ${goButton}
     </form>
-    ${error ? `<p class="error" id="error" role="alert">${esc(error)}</p>` : ""}
-    <p class="status" role="status" aria-live="polite"></p>
+    ${error || loading ? `<p class="error" id="error" role="alert"${error ? "" : " hidden"}>${esc(error)}</p>` : ""}
+    ${loading ? `<div class="progress">
+      <div class="progress-line">
+        <p class="count" aria-hidden="true">Searching GitHub…</p>
+        <button class="notify" type="button" hidden>Notify me when done</button>
+      </div>
+      <p class="current-repo" aria-hidden="true" translate="no"></p>
+      <p class="sr" role="status" aria-live="polite">Searching GitHub for ${esc(user)}’s merged pull requests.</p>
+    </div>` : ""}
     <p class="hint">Merged pull requests to public repos they don’t own, live from GitHub.</p>
     <ul class="examples" aria-label="Examples">
       <li>Try</li>
@@ -751,5 +960,5 @@ export function checkPage({ user = "", error = "" } = {}) {
     <p></p>
     <a class="source" href="https://github.com" target="_blank" rel="noopener">${icon("github")}Data from GitHub</a>
   </footer>`;
-  return layout({ head, body, script: CHECK_SCRIPT, form: true });
+  return layout({ head, body, script: CHECK_SCRIPT + (loading ? LOADING_SCRIPT : ""), form: true });
 }
