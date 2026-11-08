@@ -9,8 +9,15 @@ export const esc = (s = "") =>
 const compact = (n) =>
   n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}k` : String(n);
 
-const monthFmt = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-const monthYear = (date) => monthFmt.format(new Date(date));
+// No Intl or localeCompare on the server: loading their locale data costs more
+// CPU than the rest of a 1,000-PR /check page, and these formats are fixed anyway.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// GitHub's timestamps are all the same UTC format, so plain comparison sorts them.
+const newestFirst = (a, b) => (a < b ? 1 : a > b ? -1 : 0);
+const monthYear = (date) => {
+  const d = new Date(date);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+};
 
 const icons = {
   merged: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z"/></svg>`,
@@ -712,10 +719,11 @@ const THEME_BUTTON = `<button class="theme" type="button" aria-label="Switch bet
     </button>`;
 
 // Fallback for the footer time; the page swaps in the visitor's time zone.
-const utcStamp = (iso) =>
-  new Intl.DateTimeFormat("en-US", {
-    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC", timeZoneName: "short",
-  }).format(new Date(iso));
+const utcStamp = (iso) => {
+  const d = new Date(iso);
+  const two = (n) => String(n).padStart(2, "0");
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
+};
 
 const layout = ({ head, body, script = "", form = false }) => `<!doctype html>
 <html lang="en">
@@ -777,13 +785,13 @@ export function rank(allPrs, config = {}, { showAll = false } = {}) {
     return i === -1 ? Infinity : i;
   };
   for (const r of repoMap.values()) {
-    r.prs.sort((a, b) => b.mergedAt.localeCompare(a.mergedAt));
+    r.prs.sort((a, b) => newestFirst(a.mergedAt, b.mergedAt));
   }
 
   const lines = (r) => r.prs.reduce((s, p) => s + p.additions + p.deletions, 0);
   const sorters = {
     stars: (a, b) => b.stargazerCount - a.stargazerCount,
-    recent: (a, b) => b.prs[0].mergedAt.localeCompare(a.prs[0].mergedAt),
+    recent: (a, b) => newestFirst(a.prs[0].mergedAt, b.prs[0].mergedAt),
     prs: (a, b) => b.prs.length - a.prs.length,
     lines: (a, b) => lines(b) - lines(a),
     name: (a, b) => a.nameWithOwner.localeCompare(b.nameWithOwner),
