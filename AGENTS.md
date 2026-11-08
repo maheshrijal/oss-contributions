@@ -54,6 +54,7 @@ Ordering: strong code work goes in `priority` at the top; small docs fixes go be
 
 - No dependencies. Plain Node (20+) and the `gh` CLI only.
 - Keep the output a single static HTML file. No frameworks. No client-side data fetching, except the live progress on `/check`.
+- The `/check` loading page has one state, `data-state` on `.finder`: `searching`, `counting`, `done`, `opening`, `failed`, `missing` or `left`. Change it only through `enter()` and the `NEXT` table in `LOADING_SCRIPT`; CSS and tests read the attribute.
 - Design: minimal, sharp, light and dark themes (follows the system setting; the header toggle overrides it and is saved in `localStorage`), system font. Keep the look consistent with what's there.
 - After changing `build.mjs` or `src/render.js`, run `npm run build` and look at the page at desktop and phone widths.
 - Don't commit, push or change GitHub settings unless asked.
