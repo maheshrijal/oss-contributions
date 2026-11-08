@@ -9,8 +9,8 @@ export const esc = (s = "") =>
 const compact = (n) =>
   n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}k` : String(n);
 
-// No Intl or localeCompare on the server: loading their locale data costs more
-// CPU than the rest of a 1,000-PR /check page, and these formats are fixed anyway.
+// These dates have fixed formats, so server-side formatting and date sorting
+// avoid Intl and localeCompare, which load locale data.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // GitHub's timestamps are all the same UTC format, so plain comparison sorts them.
 const newestFirst = (a, b) => (a < b ? 1 : a > b ? -1 : 0);
