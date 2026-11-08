@@ -425,15 +425,17 @@ form[aria-busy="true"] .spin { display: block; }
 .field { position: relative; }
 .meter { position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; overflow: hidden; }
 .meter .fill { display: block; width: 0; height: 100%; background: var(--merged); transition: width .6s cubic-bezier(.2, .7, .2, 1); }
-.meter.searching .fill { width: 22%; transition: none; animation: scan 1.2s ease-in-out infinite alternate; }
-.meter.failed .fill { background: var(--del); }
+.finder[data-state="searching"] .meter .fill { width: 22%; transition: none; animation: scan 1.2s ease-in-out infinite alternate; }
+.finder[data-state="failed"] .meter .fill { background: var(--del); }
+.finder[data-state="missing"] .meter { display: none; }
 @keyframes scan { to { transform: translateX(354.5%); } }
-.finder[data-state="loading"] .go { display: none; }
-.finder[data-state="loading"] form { grid-template-columns: minmax(0, 1fr); }
+.finder[data-state]:not([data-state="failed"], [data-state="missing"]) .go { display: none; }
+.finder[data-state]:not([data-state="failed"], [data-state="missing"]) form { grid-template-columns: minmax(0, 1fr); }
 /* Shrink long names so the whole username stays visible. */
-.finder[data-state] .field { font-size: min(clamp(30px, 5.6vw, 52px), calc(min(100vw - 48px, 832px) * 1.9 / var(--chars, 1))); }
-.finder[data-state] .hint, .finder[data-state] .examples { display: none; }
-.finder:not([data-state="loading"]) .progress { display: none; }
+.finder[data-state]:not([data-state="missing"]) .field { font-size: min(clamp(30px, 5.6vw, 52px), calc(min(100vw - 48px, 832px) * 1.9 / var(--chars, 1))); }
+.finder[data-state]:not([data-state="missing"]) :is(.hint, .examples) { display: none; }
+.finder:is([data-state="failed"], [data-state="missing"]) .progress { display: none; }
+.finder:is([data-state="done"], [data-state="opening"]) .notify { display: none; }
 .finder h1.who { display: flex; align-items: center; gap: 12px; animation: appear .25s ease-out; }
 .finder h1 img { flex: none; width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
 @keyframes appear { from { opacity: 0; } }
@@ -461,12 +463,12 @@ form[aria-busy="true"] .spin { display: block; }
   .finder { margin-top: 64px; }
   .finder form { grid-template-columns: 1fr; }
   .finder .go { width: 100%; }
-  .finder[data-state="loading"] h1 { display: flex; align-items: flex-end; min-height: 2.5em; }
+  .finder[data-state]:not([data-state="failed"], [data-state="missing"]) h1 { display: flex; align-items: flex-end; min-height: 2.5em; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; border-right-color: currentColor; opacity: .5; }
   .meter .fill { transition: none; }
-  .meter.searching .fill { width: 100%; opacity: .4; animation: none; }
+  .finder[data-state="searching"] .meter .fill { width: 100%; opacity: .4; animation: none; }
   .finder h1.who { animation: none; }
 }
 `;
@@ -521,7 +523,6 @@ const live = finder.querySelector("[role=status]");
 const errorLine = finder.querySelector(".error");
 const go = finder.querySelector(".go");
 const goLabel = go.querySelector(".label");
-// A disabled default button also stops Enter from restarting the check.
 go.disabled = true;
 const user = input.value;
 const originalHeading = heading.textContent;
@@ -529,7 +530,38 @@ const pointerFine = matchMedia("(pointer: fine)").matches;
 const stillMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const number = (n) => n.toLocaleString("en-US");
 const prsWord = (n) => "merged pull request" + (n === 1 ? "" : "s");
-let shown = 0, target = 0, totalPrs = 0, frame = 0, named = false, armed = false, ended = false, avatarUrl = "";
+let shown = 0, target = 0, totalPrs = 0, frame = 0, avatarUrl = "";
+
+// This page's state lives in data-state on .finder, and only enter() changes it.
+// A move the table doesn't list is ignored, so a late event can't undo a finished check.
+const NEXT = {
+  searching: ["counting", "done", "failed", "missing", "left"],
+  counting: ["counting", "done", "failed", "missing", "left"],
+  done: ["opening"], // waits here if a notification was sent, until they come back
+  opening: [],
+  failed: [],
+  missing: [],
+  left: [],
+};
+let phase = finder.dataset.state;
+const enter = (next) => {
+  if (!NEXT[phase].includes(next)) return false;
+  phase = finder.dataset.state = next;
+  const editable = next === "failed" || next === "missing";
+  input.readOnly = !editable;
+  // A disabled default button also stops Enter from restarting the check.
+  go.disabled = !editable;
+  return true;
+};
+
+const NOTIFY_TEXT = { offered: "Notify me when done", armed: "You’ll get a notification", blocked: "Notifications are blocked in this browser" };
+let notify = "off";
+const setNotify = (next) => {
+  notify = notifyButton.dataset.state = next;
+  notifyButton.hidden = false;
+  notifyButton.textContent = NOTIFY_TEXT[next];
+  notifyButton.setAttribute("aria-disabled", next !== "offered");
+};
 
 const drawCount = (n) => { count.textContent = "Found " + number(n) + " of " + number(totalPrs) + " " + prsWord(totalPrs); };
 
@@ -549,8 +581,9 @@ const showCount = (to) => {
 };
 
 const onProgress = (e) => {
-  if (!named) {
-    named = true;
+  const first = phase === "searching";
+  if (!enter("counting")) return;
+  if (first) {
     avatarUrl = e.avatar + "&s=64";
     const img = new Image(32, 32);
     img.src = avatarUrl;
@@ -561,7 +594,6 @@ const onProgress = (e) => {
     heading.classList.add("who");
     live.textContent = "Checking " + number(e.total) + " " + prsWord(e.total) + " by " + e.name + ".";
   }
-  meter.classList.remove("searching");
   meter.setAttribute("aria-valuemax", e.total);
   meter.setAttribute("aria-valuenow", e.found);
   fill.style.width = (e.total ? (e.found / e.total) * 100 : 100) + "%";
@@ -575,7 +607,7 @@ const onProgress = (e) => {
 // Only when they're away: otherwise the page itself is the news.
 const away = () => document.hidden || !document.hasFocus();
 const tell = (title, body) => {
-  if (!armed || !away()) return false;
+  if (notify !== "armed" || !away()) return false;
   try {
     const note = new Notification(title, { body, icon: avatarUrl || undefined, tag: location.pathname });
     note.onclick = () => { focus(); note.close(); };
@@ -586,17 +618,16 @@ const tell = (title, body) => {
 };
 
 const onDone = () => {
-  ended = true;
+  const cached = phase === "searching";
+  if (!enter("done")) return;
   cancelAnimationFrame(frame);
-  const summary = !named ? "Results ready" : target ? "Found " + number(target) + " " + prsWord(target) : "No merged pull requests found";
+  const summary = cached ? "Results ready" : target ? "Found " + number(target) + " " + prsWord(target) : "No merged pull requests found";
   count.textContent = summary;
   live.textContent = summary + ". Opening the results.";
-  meter.classList.remove("searching");
   fill.style.width = "100%";
   repoLine.textContent = "";
-  notifyButton.hidden = true;
   document.title = "Done: " + user;
-  const open = () => location.replace(location.pathname + "?wait=1");
+  const open = () => { if (enter("opening")) location.replace(location.pathname + "?wait=1"); };
   const hold = stillMotion ? 0 : 250;
   // A notification's click needs this page still open, so wait until they come back.
   if (tell(user + " is ready", summary + ".")) {
@@ -609,28 +640,21 @@ const onDone = () => {
 };
 
 const onError = (e) => {
-  ended = true;
+  if (!enter(e.missing ? "missing" : "failed")) return;
   cancelAnimationFrame(frame);
-  go.disabled = false;
   const when = e.resetAt && new Date(e.resetAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const message = when ? "This site has reached GitHub’s hourly limit. Try again after " + when + "." : e.message;
   errorLine.textContent = message;
   errorLine.hidden = false;
-  input.readOnly = false;
-  meter.classList.remove("searching");
   document.title = "Check open-source contributions";
   if (e.missing) {
-    delete finder.dataset.state;
-    meter.hidden = true;
     heading.textContent = originalHeading;
     heading.classList.remove("who");
     input.setAttribute("aria-invalid", "true");
     input.setAttribute("aria-describedby", "error");
   } else {
-    finder.dataset.state = "failed";
     goLabel.textContent = "Try again";
-    if (target) meter.classList.add("failed");
-    else meter.hidden = true;
+    meter.hidden = !target;
     input.addEventListener("input", () => {
       goLabel.textContent = "Check";
       meter.hidden = true;
@@ -650,20 +674,18 @@ const handle = (event) => {
 
 // Offer this only on long waits, and only where notifications work without an installed app.
 setTimeout(() => {
-  if (ended || !pointerFine || !("Notification" in window) || Notification.permission === "denied") return;
-  notifyButton.hidden = false;
+  if (!NEXT[phase].includes("done") || !pointerFine || !("Notification" in window) || Notification.permission === "denied") return;
+  setNotify("offered");
 }, 6000);
 notifyButton.addEventListener("click", async () => {
-  if (notifyButton.getAttribute("aria-disabled") === "true") return;
+  if (notify !== "offered") return;
   const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
   if (permission === "default") return;
-  armed = permission === "granted";
-  notifyButton.textContent = armed ? "You’ll get a notification" : "Notifications are blocked in this browser";
-  notifyButton.setAttribute("aria-disabled", "true");
-  live.textContent = notifyButton.textContent + ".";
+  setNotify(permission === "granted" ? "armed" : "blocked");
+  live.textContent = NOTIFY_TEXT[notify] + ".";
 });
 
-addEventListener("pagehide", () => { ended = true; });
+addEventListener("pagehide", () => enter("left"));
 (async () => {
   try {
     const res = await fetch(finder.dataset.stream);
@@ -679,7 +701,7 @@ addEventListener("pagehide", () => { ended = true; });
       lines.forEach((line) => handle(JSON.parse(line)));
     }
   } catch {}
-  if (!ended) onError({ message: "Lost the connection before the check finished." });
+  onError({ message: "Lost the connection before the check finished." });
 })();
 `;
 
@@ -938,13 +960,13 @@ ${loading ? `<noscript><meta http-equiv="refresh" content="0; url=${esc(path)}?w
     ${THEME_BUTTON}
   </header>
 
-  <main id="main" class="finder"${loading ? ` data-state="loading" data-stream="${esc(path)}/stream"` : ""}>
+  <main id="main" class="finder"${loading ? ` data-state="searching" data-stream="${esc(path)}/stream"` : ""}>
     <h1>See anyone’s open-source contributions</h1>
     <form class="lookup" action="/check" method="get" role="search">
       <label class="field"${loading ? ` style="--chars:${11 + user.length}"` : ""}>
         <span>github.com/</span>
         <input ${inputAttrs} value="${esc(user)}" placeholder="username…" aria-label="GitHub username"${error ? ` aria-invalid="true" aria-describedby="error"` : ""}${loading ? " readonly" : ""}>
-        ${loading ? `<span class="meter searching" role="progressbar" aria-label="Pull requests found"><span class="fill"></span></span>` : ""}
+        ${loading ? `<span class="meter" role="progressbar" aria-label="Pull requests found"><span class="fill"></span></span>` : ""}
       </label>
       ${goButton}
     </form>
