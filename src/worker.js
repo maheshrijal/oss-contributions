@@ -23,7 +23,7 @@ query($login: String!, $q: String!, $after: String) {
         title url number state createdAt mergedAt additions deletions
         repository {
           nameWithOwner url description stargazerCount isPrivate
-          owner { login avatarUrl }
+          owner { login avatarUrl __typename }
           primaryLanguage { name color }
         }
       }

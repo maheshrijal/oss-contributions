@@ -94,8 +94,8 @@ function activityChart(prs, fetchedAt) {
 
 // ---------- rows ----------
 
-const prRow = (pr) => `
-          <li class="pr">
+const prRow = (pr, hidden = false) => `
+          <li class="pr"${hidden ? " hidden" : ""}>
             <span class="state" title="Merged">${icon("merged")}<span class="sr">Merged</span></span>
             <a class="pr-title" href="${esc(pr.url)}" target="_blank" rel="noopener">${esc(pr.title)}</a>
             <span class="pr-meta">
@@ -105,24 +105,121 @@ const prRow = (pr) => `
             </span>
           </li>`;
 
-const repoRow = (r, i) => {
+// On /check, long lists show the newest PRs and reveal the rest in steps.
+const PR_LIMIT = 10;
+const plural = (n, word) => `${n.toLocaleString("en-US")} ${word}${n === 1 ? "" : "s"}`;
+
+const prList = (prs, foldLong) => {
+  // Hiding a single PR behind a click saves nothing.
+  const shown = foldLong && prs.length > PR_LIMIT + 1 ? PR_LIMIT : prs.length;
+  const rows = prs.map((pr, n) => prRow(pr, n >= shown)).join("");
+  const left = prs.length - shown;
+  return `<ul class="prs">${rows}
+          </ul>${left ? `
+          <div class="pr-more" data-limit="${PR_LIMIT}">
+            <button class="show-more" type="button">Show ${Math.min(left, PR_LIMIT)} more</button>
+            <button class="show-less" type="button" hidden>Collapse</button>
+            <span class="pr-count" aria-live="polite">${shown} of ${prs.length.toLocaleString("en-US")}</span>
+          </div>` : ""}`;
+};
+
+const repoLinkLine = (r) => `<div class="fold-top">${r.description ? `<p class="desc">${esc(r.description)}</p>` : ""}<a class="repo-link" href="${esc(r.url)}" target="_blank" rel="noopener">View repo${icon("arrow")}</a></div>`;
+
+// opts.foldLong: fold long PR lists. opts.closed: show a one-line row that opens to the PRs.
+const repoRow = (r, i, { foldLong = false, closed = false } = {}) => {
   const [owner, name] = r.nameWithOwner.split("/");
   const lang = r.primaryLanguage
     ? `<span class="lang"><i style="background:${esc(r.primaryLanguage.color ?? "#888")}"></i>${esc(r.primaryLanguage.name)}</span>`
     : "";
+  const stars = `<span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(r.stargazerCount)}</span>`;
+  const desc = r.description ? `<p class="desc">${esc(r.description)}</p>` : "";
+  const body = closed
+    ? `<details class="repo-body">
+          <summary class="repo-head">
+            <span class="fold-name" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</span>
+            <span class="repo-meta"><span>${plural(r.prs.length, "PR")}</span>${lang}${stars}</span>
+          </summary>
+          ${repoLinkLine(r)}
+          ${prList(r.prs, foldLong)}
+        </details>`
+    : `<details class="repo-body" open>
+          <summary class="repo-sum">
+            <span class="repo-head">
+              <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
+              <span class="repo-meta">${lang}${stars}</span>
+            </span>
+          </summary>
+          ${desc}
+          ${prList(r.prs, foldLong)}
+        </details>`;
   return `
-      <li class="repo" data-featured="${i}" data-stars="${r.stargazerCount}" data-recent="${r.prs[0].mergedAt}" data-prs="${r.prs.length}">
+      <li class="repo${closed ? " fold" : ""}" data-featured="${i}" data-stars="${r.stargazerCount}" data-recent="${r.prs[0].mergedAt}" data-prs="${r.prs.length}">
         <span class="rank" aria-hidden="true">${i + 1}</span>
         <img class="owner" src="${esc(r.owner.avatarUrl)}&s=72" alt="" width="36" height="36" loading="lazy">
-        <div class="repo-body">
-          <div class="repo-head">
-            <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
-            <span class="repo-meta">${lang}<span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(r.stargazerCount)}</span></span>
-          </div>
-          ${r.description ? `<p class="desc">${esc(r.description)}</p>` : ""}
-          <ul class="prs">${r.prs.map(prRow).join("")}
-          </ul>
-        </div>
+        ${body}
+      </li>`;
+};
+
+// ---------- organization groups (/check, big accounts) ----------
+
+// From this many repos on, a /check page becomes an index: every row starts closed.
+const INDEX_MIN_REPOS = 10;
+
+// Show this many repo chips before folding the rest behind a "more" chip.
+const CHIP_LIMIT = 6;
+
+const prCount = (x) => x.prCount ?? x.prs.length;
+const mostPrsFirst = (a, b) => prCount(b) - prCount(a) || b.stargazerCount - a.stargazerCount;
+
+// GitHub organizations with two or more repos become one group; everything else, including
+// repos under a person's account, stays as its own row.
+function groupByOrg(repos) {
+  const orgs = new Map();
+  for (const repo of repos) {
+    const org = repo.owner.__typename === "Organization" ? repo.owner.login : repo.nameWithOwner;
+    if (!orgs.has(org)) orgs.set(org, []);
+    orgs.get(org).push(repo);
+  }
+  return [...orgs.values()]
+    .map((list) =>
+      list.length === 1
+        ? list[0]
+        : {
+            name: list[0].owner.login,
+            avatarUrl: list[0].owner.avatarUrl,
+            repos: [...list].sort(mostPrsFirst),
+            prCount: list.reduce((n, r) => n + r.prs.length, 0),
+            stargazerCount: list.reduce((n, r) => n + r.stargazerCount, 0),
+            recent: list.reduce((m, r) => (r.prs[0].mergedAt > m ? r.prs[0].mergedAt : m), ""),
+          },
+    )
+    .sort(mostPrsFirst);
+}
+
+// One repo's PRs show at a time; the chips choose which. Without JavaScript the first still shows.
+const orgRow = (g, i) => {
+  const shown = g.repos.length > CHIP_LIMIT + 1 ? CHIP_LIMIT : g.repos.length;
+  const panelId = (n) => `org-${i}-repo-${n}`;
+  const chips = g.repos.map((r, n) => {
+    const name = r.nameWithOwner.split("/")[1];
+    return `<button class="chip" type="button" aria-pressed="${n === 0}" aria-controls="${panelId(n)}" aria-label="${esc(name)}, ${plural(r.prs.length, "PR")}"${n < shown ? "" : " hidden"}><span translate="no">${esc(name)}</span>${r.prs.length.toLocaleString("en-US")}</button>`;
+  });
+  const panels = g.repos.map((r, n) => `
+          <div class="chip-panel" id="${panelId(n)}" data-name="${esc(r.nameWithOwner.split("/")[1])}"${n === 0 ? "" : " hidden"}>
+            ${repoLinkLine(r)}
+            ${prList(r.prs, true)}
+          </div>`);
+  return `
+      <li class="repo fold org" data-featured="${i}" data-stars="${g.stargazerCount}" data-recent="${g.recent}" data-prs="${g.prCount}">
+        <span class="rank" aria-hidden="true">${i + 1}</span>
+        <img class="owner" src="${esc(g.avatarUrl)}&s=72" alt="" width="36" height="36" loading="lazy">
+        <details class="repo-body">
+          <summary class="repo-head">
+            <span class="fold-name" translate="no">${esc(g.name)}</span>
+            <span class="repo-meta"><span>${plural(g.prCount, "PR")} in ${g.repos.length} repos</span><span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(g.stargazerCount)}</span></span>
+          </summary>
+          <div class="chips" role="group" aria-label="Repos in ${esc(g.name)}">${chips.join("")}${shown < g.repos.length ? `<button class="chip chip-more" type="button">${g.repos.length - shown} more</button>` : ""}</div>${panels.join("")}
+        </details>
       </li>`;
 };
 
@@ -237,15 +334,33 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 }
 .tooltip.show { opacity: 1; }
 
-.sorter { display: flex; align-items: center; gap: 10px; }
-.sort-label { font-size: 13px; color: var(--ink-3); }
-.sort { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
-.sort button {
-  font: inherit; font-size: 13px; color: var(--ink-3); background: none; border: 0; cursor: pointer; white-space: nowrap;
-  padding: 5px 12px; border-radius: 6px; transition: color .15s, background-color .15s;
-}
-.sort button:hover { color: var(--ink); }
-.sort button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.sort-head { justify-content: flex-start; align-items: baseline; gap: 2px 0; }
+.sort-head h2 { font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
+.sort-head h2 b { color: var(--ink); font-weight: 500; }
+.sort-head h2::after { content: ","; }
+.sort-by { margin: 0 6px 0 4px; font-size: 14px; color: var(--ink-2); }
+.sort-menu { position: relative; }
+.sort-pick { display: inline-flex; align-items: center; gap: 8px; padding: 4px 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.sort-pick span { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.sort-pick::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2px) rotate(45deg); transition: transform .15s ease-out; }
+.sort-pick[aria-expanded="true"]::after { transform: translateY(2px) rotate(-135deg); }
+.sort-pick:focus-visible, .sort button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
+.sort { position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; min-width: 148px; padding: 4px; border-radius: 9px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0,0,0,.14); }
+.sort button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 8px; border: 0; border-radius: 5px; background: none; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; white-space: nowrap; transition: background-color .15s; }
+.sort button:hover { background: var(--hover); }
+.sort button[aria-pressed="true"] { font-weight: 500; }
+.sort button[aria-pressed="true"]::after { content: ""; width: 4px; height: 9px; margin-right: 3px; border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: translateY(-1px) rotate(45deg); }
+
+.fold-all { padding: 4px 0; border: 0; background: none; color: var(--ink-2); cursor: pointer; font: inherit; font-size: 13px; white-space: nowrap; transition: color .15s; }
+.fold-all:hover { color: var(--ink); }
+.fold-all:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
+.sort-head .fold-all { margin-left: auto; }
+.repo-sum { display: grid; grid-template-columns: minmax(0, 1fr) 12px; gap: 0 12px; cursor: pointer; list-style: none; }
+.repo-sum::-webkit-details-marker { display: none; }
+.repo-sum::after { content: ""; grid-column: 2; grid-row: 1; align-self: center; justify-self: center; width: 7px; height: 7px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2.5px) rotate(45deg); transition: transform .15s ease-out; }
+details[open] > .repo-sum::after { transform: translateY(2.5px) rotate(-135deg); }
+.repo-sum:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
+@media (hover: hover) { .repo-sum:hover::after { border-color: var(--ink); } }
 
 .repos { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .repo { display: grid; grid-template-columns: 24px 36px minmax(0, 1fr); gap: 0 16px; padding: 22px 0; border-bottom: 1px solid var(--line); }
@@ -289,9 +404,10 @@ footer time { color: var(--ink-2); }
   .theme { grid-column: 3; grid-row: 1; margin-right: -8px; }
   .hero { margin-top: 48px; }
   .plot { height: 140px; }
-  .sorter { width: 100%; }
-  .sort { flex: 1; display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); }
-  .sort button { padding: 6px 4px; }
+  .sort-head h2 { width: 100%; }
+  .sort-by { margin-left: 0; }
+  .sort-pick, .fold-all { padding: 10px 0; margin: -6px 0; }
+  .sort button { padding: 10px 8px; }
   .repo { grid-template-columns: 36px minmax(0, 1fr); }
   .rank { display: none; }
   .pr { grid-template-columns: 16px minmax(0, 1fr); }
@@ -300,7 +416,7 @@ footer time { color: var(--ink-2); }
   .diff { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, .tooltip { transition: none !important; }
+  *, .tooltip, .sort-pick::after, .repo-sum::after { transition: none !important; }
 }
 %%EXTRA_CSS%%`;
 
@@ -329,6 +445,46 @@ sortButtons.forEach((btn) => btn.addEventListener("click", () => {
 }));
 const initial = new URLSearchParams(location.search).get("sort");
 if (by[initial]) sortBy(initial);
+
+// Sort menu: choosing an option, clicking away, Escape or tabbing out closes it.
+const sortPick = document.querySelector(".sort-pick");
+if (sortPick) {
+  const options = document.querySelector(".sort");
+  const menu = sortPick.parentElement;
+  const show = (open) => { options.hidden = !open; sortPick.setAttribute("aria-expanded", open); };
+  const showChoice = () => {
+    const choice = options.querySelector('[aria-pressed="true"]');
+    if (choice) sortPick.firstElementChild.textContent = choice.textContent;
+  };
+  showChoice();
+  sortPick.addEventListener("click", () => show(options.hidden));
+  options.addEventListener("click", (e) => {
+    if (!e.target.closest("button")) return;
+    showChoice();
+    show(false);
+    sortPick.focus();
+  });
+  addEventListener("click", (e) => { if (!menu.contains(e.target)) show(false); });
+  menu.addEventListener("focusout", (e) => { if (e.relatedTarget && !menu.contains(e.relatedTarget)) show(false); });
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || options.hidden) return;
+    show(false);
+    sortPick.focus();
+  });
+}
+
+// Expand all / Collapse all. The label follows the rows, however they were opened.
+const foldAll = document.querySelector(".fold-all");
+if (foldAll) {
+  const closedRow = () => document.querySelector(".repos > li > details:not([open])");
+  const label = () => { foldAll.textContent = closedRow() ? "Expand all" : "Collapse all"; };
+  foldAll.addEventListener("click", () => {
+    const open = Boolean(closedRow());
+    document.querySelectorAll(".repos > li > details").forEach((row) => { row.open = open; });
+    label();
+  });
+  document.querySelector(".repos").addEventListener("toggle", label, true);
+}
 
 // Chart tooltip
 const chart = document.querySelector(".chart");
@@ -384,6 +540,52 @@ document.querySelector(".theme").addEventListener("click", () => {
 `;
 
 const FORM_CSS = `
+/* An index page: one-line rows that open in place. */
+.repos > .fold { grid-template-columns: 36px minmax(0, 1fr); padding: 16px 0; }
+.repos > .fold > .rank { display: none; }
+/* A stronger divider under an open row shows where it ends and the next one starts. */
+.repos > .fold:has(> details[open]) { padding-bottom: 22px; border-bottom-color: var(--line-strong); }
+.fold > details > summary { cursor: pointer; list-style: none; }
+.fold > details > summary::-webkit-details-marker { display: none; }
+.fold summary:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
+.fold > details > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto 12px; align-items: center; gap: 2px 16px; min-height: 36px; }
+/* The chevron stays in one column, so rows line up however long the name is. */
+.fold > details > summary::after { content: ""; grid-column: 3; grid-row: 1; justify-self: center; width: 7px; height: 7px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2.5px) rotate(45deg); transition: transform .15s ease-out; }
+.fold > details[open] > summary::after { transform: translateY(2.5px) rotate(-135deg); }
+.fold .repo-meta, .fold .repo-meta .stars { color: var(--ink-2); }
+.fold-name { min-width: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+@media (hover: hover) { .fold > details > summary:hover::after { border-color: var(--ink); } }
+/* Open content uses the full row, including the space under the logo. */
+.fold > details > .fold-top, .fold > details > .prs { margin-left: -52px; }
+.fold > details > .pr-more { margin-left: -24px; }
+.fold-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 14px; }
+/* Full text in the darker ink: it is the one line that says what the repo is. */
+.fold-top .desc { flex: 1; min-width: 0; margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); white-space: normal; overflow: visible; text-overflow: clip; }
+.fold-top .repo-link { margin-left: auto; }
+.repo-link { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; transition: text-decoration-color .15s; }
+.repo-link:hover { text-decoration-color: var(--ink); }
+.repo-link svg { width: 12px; height: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0 -52px; }
+.chip, .pr-more button { padding: 5px 10px; border: 0; border-radius: 7px; background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; transition: background-color .15s, box-shadow .15s, color .15s; }
+.chip { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-weight: 400; font-variant-numeric: tabular-nums; }
+.chip[hidden] { display: none; }
+.chip span { color: var(--ink); font-weight: 500; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--page); box-shadow: inset 0 0 0 1px var(--ink); }
+.chip[aria-pressed="true"] span { color: inherit; }
+.chip:focus-visible { outline: 2px solid var(--series); outline-offset: 1px; }
+.chip-more { color: var(--ink); font-weight: 500; }
+@media (hover: hover) { .chip:not([aria-pressed="true"]):hover, .pr-more button:hover { box-shadow: inset 0 0 0 1px var(--ink-3); } }
+.chip-panel { margin-left: -52px; }
+.pr[hidden] { display: none; }
+.pr-more { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; font-size: 13px; }
+.pr-more button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
+.pr-count { margin-left: auto; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .fold > details > summary { grid-template-columns: minmax(0, 1fr) 12px; }
+  .fold > details > summary::after { grid-column: 2; grid-row: 1 / span 2; }
+  .fold .repo-meta { grid-column: 1; grid-row: 2; }
+}
+
 .checkbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--line); font-size: 14px; }
 .checkbar > a { color: var(--ink-2); transition: color .15s; }
 .checkbar > a:hover { color: var(--ink); }
@@ -474,6 +676,7 @@ form[aria-busy="true"] .spin { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; border-right-color: currentColor; opacity: .5; }
+  .fold > details > summary::after { transition: none; }
   .meter .fill { transition: none; }
   .finder[data-state="searching"] .meter .fill { width: 100%; opacity: .4; animation: none; }
   .finder h1.who { animation: none; }
@@ -491,6 +694,46 @@ const busy = (form, user) => {
   input.readOnly = true;
   if (user) input.value = user;
 };
+// Repo chips: show one repo's PRs at a time.
+document.querySelector(".repos")?.addEventListener("click", (e) => {
+  const control = e.target.closest(".pr-more button");
+  if (control) {
+    const box = control.parentElement;
+    const rows = [...box.previousElementSibling.children];
+    const limit = Number(box.dataset.limit);
+    const showMore = box.querySelector(".show-more");
+    const showLess = box.querySelector(".show-less");
+    const collapsing = control === showLess;
+    const before = rows.filter((r) => !r.hidden).length;
+    const count = collapsing ? limit : Math.min(rows.length, before + limit);
+    rows.forEach((row, i) => { row.hidden = i >= count; });
+    const left = rows.length - count;
+    showMore.textContent = "Show " + Math.min(left, limit) + " more";
+    showMore.hidden = !left;
+    showLess.hidden = collapsing;
+    box.querySelector(".pr-count").textContent = count + " of " + rows.length.toLocaleString("en-US");
+    if (collapsing) {
+      box.scrollIntoView({ block: "nearest" });
+      showMore.focus();
+    } else {
+      rows[before].querySelector("a").focus();
+    }
+    return;
+  }
+  const more = e.target.closest(".chip-more");
+  if (more) {
+    const revealed = [...more.parentElement.querySelectorAll(".chip[hidden]")];
+    revealed.forEach((chip) => { chip.hidden = false; });
+    more.remove();
+    revealed[0]?.focus();
+    return;
+  }
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  const org = chip.closest(".org");
+  org.querySelectorAll(".chip:not(.chip-more)").forEach((c) => c.setAttribute("aria-pressed", c === chip));
+  org.querySelectorAll(".chip-panel").forEach((p) => { p.hidden = p.id !== chip.getAttribute("aria-controls"); });
+});
 // ?wait=1 is only how the page got here; keep it out of the address bar.
 if (new URLSearchParams(location.search).has("wait")) {
   const clean = new URL(location);
@@ -820,6 +1063,8 @@ export function contributionsPage(data, config = {}, opts = {}) {
   const { fetchedAt, profile } = data;
   const { prs, repos } = rank(data.prs, config, opts);
   const { ogImage = null, check = false, capped = false } = opts;
+  const isIndex = check && repos.length >= INDEX_MIN_REPOS;
+  const items = isIndex ? groupByOrg(repos) : repos;
 
   const totalStars = repos.reduce((s, r) => s + r.stargazerCount, 0);
   // The page content only changes when a newly shown PR is merged, so search
@@ -863,10 +1108,20 @@ export function contributionsPage(data, config = {}, opts = {}) {
     .join("");
 
   // "Featured" means the owner's priority order, so only show it when there is one.
-  const sorts = [
-    ...((config.priority ?? []).length ? [["featured", "Featured"]] : []),
-    ["stars", "Stars"], ["recent", "Recent"], ["prs", "Most PRs"],
-  ];
+  const sorts = isIndex
+    ? [["prs", "Most PRs"], ["stars", "Stars"], ["recent", "Recent"]]
+    : [
+        ...((config.priority ?? []).length ? [["featured", "Featured"]] : []),
+        ["stars", "Stars"], ["recent", "Recent"], ["prs", "Most PRs"],
+      ];
+
+  const sortOptions = `<div class="sort" role="group" aria-labelledby="sort-label" id="sort-options" hidden>
+            ${sorts.map(([key, label], i) => `<button type="button" data-sort="${key}" aria-pressed="${i === 0}">${label}</button>`).join("\n            ")}
+          </div>`;
+  const sortMenu = `<div class="sort-menu">
+            <button class="sort-pick" type="button" aria-expanded="false" aria-controls="sort-options" aria-labelledby="sort-label sort-value"><span id="sort-value">${sorts[0][1]}</span></button>
+            ${sortOptions}
+          </div>`;
 
   const head = `<title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
@@ -885,7 +1140,8 @@ ${ogImage ? `<meta property="og:image:width" content="1200">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${esc(ogImage ?? profile.avatar_url)}">
-<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>`;
+<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>
+<noscript><style>html .pr[hidden] { display: grid; } html .chip-panel[hidden] { display: block; } html .chip-panel::before { content: attr(data-name); display: block; margin-top: 16px; font-size: 14px; font-weight: 600; } html .chips, html .pr-more, html .sort-by, html .sort-menu, html .fold-all { display: none; } html .sort-head h2::after { content: none; }</style></noscript>`;
 
   const bar = check
     ? `  <div class="checkbar">
@@ -918,16 +1174,15 @@ ${config.chart === false ? "" : `    <section aria-labelledby="activity">
     </section>
 `}
     <section aria-labelledby="projects">
-      <div class="section-head">
+      ${repos.length ? `<div class="section-head sort-head">
+        <h2 id="projects"><b>${plural(repos.length, "repo")}</b> across <b>${plural(new Set(repos.map((r) => r.owner.login)).size, "org")}</b></h2>
+        <span class="sort-by" id="sort-label">sorted by</span>
+        ${sortMenu}
+        <button class="fold-all" type="button">${isIndex ? "Expand all" : "Collapse all"}</button>
+      </div>` : `<div class="section-head">
         <h2 id="projects">Projects</h2>
-        <div class="sorter">
-          <span class="sort-label" id="sort-label">Sort by</span>
-          <div class="sort" role="group" aria-labelledby="sort-label" style="--n:${sorts.length}">
-            ${sorts.map(([key, label], i) => `<button type="button" data-sort="${key}" aria-pressed="${i === 0}">${label}</button>`).join("\n            ")}
-          </div>
-        </div>
-      </div>
-      ${repos.length ? `<ol class="repos">${repos.map(repoRow).join("")}
+      </div>`}
+      ${repos.length ? `<ol class="repos">${items.map((x, i) => (x.repos ? orgRow(x, i) : repoRow(x, i, { foldLong: check, closed: isIndex }))).join("")}
       </ol>` : `<p class="empty">No merged pull requests to public repos ${esc(name)} doesn't own.</p>`}
     </section>
   </main>
