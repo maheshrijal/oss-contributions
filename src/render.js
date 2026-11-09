@@ -132,7 +132,7 @@ const repoRow = (r, i, { foldLong = false, closed = false } = {}) => {
     ? `<span class="lang"><i style="background:${esc(r.primaryLanguage.color ?? "#888")}"></i>${esc(r.primaryLanguage.name)}</span>`
     : "";
   const stars = `<span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(r.stargazerCount)}</span>`;
-  const desc = r.description ? `<span class="desc">${esc(r.description)}</span>` : "";
+  const desc = r.description ? `<p class="desc">${esc(r.description)}</p>` : "";
   const body = closed
     ? `<details class="repo-body">
           <summary class="repo-head">
@@ -148,8 +148,8 @@ const repoRow = (r, i, { foldLong = false, closed = false } = {}) => {
               <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
               <span class="repo-meta">${lang}${stars}</span>
             </span>
-            ${desc}
           </summary>
+          ${desc}
           ${prList(r.prs, foldLong)}
         </details>`;
   return `
@@ -357,7 +357,6 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .sort-head .fold-all { margin-left: auto; }
 .repo-sum { display: grid; grid-template-columns: minmax(0, 1fr) 12px; gap: 0 12px; cursor: pointer; list-style: none; }
 .repo-sum::-webkit-details-marker { display: none; }
-.repo-sum > .desc { grid-column: 1; }
 .repo-sum::after { content: ""; grid-column: 2; grid-row: 1; align-self: center; justify-self: center; width: 7px; height: 7px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2.5px) rotate(45deg); transition: transform .15s ease-out; }
 details[open] > .repo-sum::after { transform: translateY(2.5px) rotate(-135deg); }
 .repo-sum:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
@@ -544,7 +543,7 @@ const FORM_CSS = `
 /* An index page: one-line rows that open in place. */
 .repos > .fold { grid-template-columns: 36px minmax(0, 1fr); padding: 16px 0; }
 .repos > .fold > .rank { display: none; }
-/* An open row becomes a panel, so it's clear where it ends and the next one starts. */
+/* A stronger divider under an open row shows where it ends and the next one starts. */
 .repos > .fold:has(> details[open]) { padding-bottom: 22px; border-bottom-color: var(--line-strong); }
 .fold > details > summary { cursor: pointer; list-style: none; }
 .fold > details > summary::-webkit-details-marker { display: none; }
