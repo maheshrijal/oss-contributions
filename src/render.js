@@ -203,7 +203,7 @@ const orgRow = (g, i) => {
     return `<button class="chip" type="button" aria-pressed="${n === 0}" aria-controls="${panelId(n)}" aria-label="${esc(name)}, ${plural(r.prs.length, "PR")}"${n < shown ? "" : " hidden"}><span translate="no">${esc(name)}</span>${r.prs.length.toLocaleString("en-US")}</button>`;
   });
   const panels = g.repos.map((r, n) => `
-          <div class="chip-panel" id="${panelId(n)}"${n === 0 ? "" : " hidden"}>
+          <div class="chip-panel" id="${panelId(n)}" data-name="${esc(r.nameWithOwner.split("/")[1])}"${n === 0 ? "" : " hidden"}>
             ${repoLinkLine(r)}
             ${prList(r.prs, true)}
           </div>`);
@@ -542,11 +542,9 @@ const FORM_CSS = `
 .sort button[aria-pressed="true"]:hover { background: var(--hover); }
 .sort button[aria-pressed="true"]::after { content: ""; width: 4px; height: 9px; margin-right: 3px; border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: translateY(-1px) rotate(45deg); }
 .chip-panel { margin-left: -52px; }
-.chip-panel[hidden] { display: none; }
 .pr[hidden] { display: none; }
 .pr-more { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; font-size: 13px; }
 .pr-more button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
-.pr-more button[hidden] { display: none; }
 .pr-count { margin-left: auto; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
   .sort button { padding: 10px 8px; }
@@ -648,7 +646,7 @@ form[aria-busy="true"] .spin { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; border-right-color: currentColor; opacity: .5; }
-  .fold > details > summary::after { transition: none; }
+  .fold > details > summary::after, .sort-pick::after { transition: none; }
   .meter .fill { transition: none; }
   .finder[data-state="searching"] .meter .fill { width: 100%; opacity: .4; animation: none; }
   .finder h1.who { animation: none; }
@@ -676,7 +674,8 @@ document.querySelector(".repos")?.addEventListener("click", (e) => {
     const showMore = box.querySelector(".show-more");
     const showLess = box.querySelector(".show-less");
     const collapsing = control === showLess;
-    const count = collapsing ? limit : Math.min(rows.length, rows.filter((r) => !r.hidden).length + limit);
+    const before = rows.filter((r) => !r.hidden).length;
+    const count = collapsing ? limit : Math.min(rows.length, before + limit);
     rows.forEach((row, i) => { row.hidden = i >= count; });
     const left = rows.length - count;
     showMore.textContent = "Show " + Math.min(left, limit) + " more";
@@ -686,8 +685,8 @@ document.querySelector(".repos")?.addEventListener("click", (e) => {
     if (collapsing) {
       box.scrollIntoView({ block: "nearest" });
       showMore.focus();
-    } else if (!left) {
-      showLess.focus();
+    } else {
+      rows[before].querySelector("a").focus();
     }
     return;
   }
@@ -1150,7 +1149,7 @@ ${ogImage ? `<meta property="og:image:width" content="1200">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${esc(ogImage ?? profile.avatar_url)}">
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>${check ? `
-<noscript><style>.pr[hidden] { display: grid; } .pr-more, .sort-by, .sort-menu, .fold-all { display: none; } .index-head h2::after { content: none; }</style></noscript>` : ""}`;
+<noscript><style>html .pr[hidden] { display: grid; } html .chip-panel[hidden] { display: block; } html .chip-panel::before { content: attr(data-name); display: block; margin-top: 16px; font-size: 14px; font-weight: 600; } html .chips, html .pr-more, html .sort-by, html .sort-menu, html .fold-all { display: none; } html .index-head h2::after { content: none; }</style></noscript>` : ""}`;
 
   const bar = check
     ? `  <div class="checkbar">
