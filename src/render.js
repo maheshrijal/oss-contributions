@@ -132,7 +132,7 @@ const repoRow = (r, i, { foldLong = false, closed = false } = {}) => {
     ? `<span class="lang"><i style="background:${esc(r.primaryLanguage.color ?? "#888")}"></i>${esc(r.primaryLanguage.name)}</span>`
     : "";
   const stars = `<span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(r.stargazerCount)}</span>`;
-  const desc = r.description ? `<p class="desc">${esc(r.description)}</p>` : "";
+  const desc = r.description ? `<span class="desc">${esc(r.description)}</span>` : "";
   const body = closed
     ? `<details class="repo-body">
           <summary class="repo-head">
@@ -142,14 +142,16 @@ const repoRow = (r, i, { foldLong = false, closed = false } = {}) => {
           ${repoLinkLine(r)}
           ${prList(r.prs, foldLong)}
         </details>`
-    : `<div class="repo-body">
-          <div class="repo-head">
-            <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
-            <span class="repo-meta">${lang}${stars}</span>
-          </div>
-          ${desc}
+    : `<details class="repo-body" open>
+          <summary class="repo-sum">
+            <span class="repo-head">
+              <a class="repo-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no"><span class="muted">${esc(owner)} / </span>${esc(name)}</a>
+              <span class="repo-meta">${lang}${stars}</span>
+            </span>
+            ${desc}
+          </summary>
           ${prList(r.prs, foldLong)}
-        </div>`;
+        </details>`;
   return `
       <li class="repo${closed ? " fold" : ""}" data-featured="${i}" data-stars="${r.stargazerCount}" data-recent="${r.prs[0].mergedAt}" data-prs="${r.prs.length}">
         <span class="rank" aria-hidden="true">${i + 1}</span>
@@ -332,15 +334,34 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 }
 .tooltip.show { opacity: 1; }
 
-.sorter { display: flex; align-items: center; gap: 10px; }
-.sort-label { font-size: 13px; color: var(--ink-3); }
-.sort { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
-.sort button {
-  font: inherit; font-size: 13px; color: var(--ink-3); background: none; border: 0; cursor: pointer; white-space: nowrap;
-  padding: 5px 12px; border-radius: 6px; transition: color .15s, background-color .15s;
-}
-.sort button:hover { color: var(--ink); }
-.sort button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.sort-head { justify-content: flex-start; align-items: baseline; gap: 2px 0; }
+.sort-head h2 { font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
+.sort-head h2 b { color: var(--ink); font-weight: 500; }
+.sort-head h2::after { content: ","; }
+.sort-by { margin: 0 6px 0 4px; font-size: 14px; color: var(--ink-2); }
+.sort-menu { position: relative; }
+.sort-pick { display: inline-flex; align-items: center; gap: 8px; padding: 4px 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.sort-pick span { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.sort-pick::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2px) rotate(45deg); transition: transform .15s ease-out; }
+.sort-pick[aria-expanded="true"]::after { transform: translateY(2px) rotate(-135deg); }
+.sort-pick:focus-visible, .sort button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
+.sort { position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; min-width: 148px; padding: 4px; border-radius: 9px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0,0,0,.14); }
+.sort button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 8px; border: 0; border-radius: 5px; background: none; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; white-space: nowrap; transition: background-color .15s; }
+.sort button:hover { background: var(--hover); }
+.sort button[aria-pressed="true"] { font-weight: 500; }
+.sort button[aria-pressed="true"]::after { content: ""; width: 4px; height: 9px; margin-right: 3px; border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: translateY(-1px) rotate(45deg); }
+
+.fold-all { padding: 4px 0; border: 0; background: none; color: var(--ink-2); cursor: pointer; font: inherit; font-size: 13px; white-space: nowrap; transition: color .15s; }
+.fold-all:hover { color: var(--ink); }
+.fold-all:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
+.sort-head .fold-all { margin-left: auto; }
+.repo-sum { display: grid; grid-template-columns: minmax(0, 1fr) 12px; gap: 0 12px; cursor: pointer; list-style: none; }
+.repo-sum::-webkit-details-marker { display: none; }
+.repo-sum > .desc { grid-column: 1; }
+.repo-sum::after { content: ""; grid-column: 2; grid-row: 1; align-self: center; justify-self: center; width: 7px; height: 7px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2.5px) rotate(45deg); transition: transform .15s ease-out; }
+details[open] > .repo-sum::after { transform: translateY(2.5px) rotate(-135deg); }
+.repo-sum:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
+@media (hover: hover) { .repo-sum:hover::after { border-color: var(--ink); } }
 
 .repos { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .repo { display: grid; grid-template-columns: 24px 36px minmax(0, 1fr); gap: 0 16px; padding: 22px 0; border-bottom: 1px solid var(--line); }
@@ -384,9 +405,10 @@ footer time { color: var(--ink-2); }
   .theme { grid-column: 3; grid-row: 1; margin-right: -8px; }
   .hero { margin-top: 48px; }
   .plot { height: 140px; }
-  .sorter { width: 100%; }
-  .sort { flex: 1; display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); }
-  .sort button { padding: 6px 4px; }
+  .sort-head h2 { width: 100%; }
+  .sort-by { margin-left: 0; }
+  .sort-pick, .fold-all { padding: 10px 0; margin: -6px 0; }
+  .sort button { padding: 10px 8px; }
   .repo { grid-template-columns: 36px minmax(0, 1fr); }
   .rank { display: none; }
   .pr { grid-template-columns: 16px minmax(0, 1fr); }
@@ -395,7 +417,7 @@ footer time { color: var(--ink-2); }
   .diff { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, .tooltip { transition: none !important; }
+  *, .tooltip, .sort-pick::after, .repo-sum::after { transition: none !important; }
 }
 %%EXTRA_CSS%%`;
 
@@ -424,6 +446,46 @@ sortButtons.forEach((btn) => btn.addEventListener("click", () => {
 }));
 const initial = new URLSearchParams(location.search).get("sort");
 if (by[initial]) sortBy(initial);
+
+// Sort menu: choosing an option, clicking away, Escape or tabbing out closes it.
+const sortPick = document.querySelector(".sort-pick");
+if (sortPick) {
+  const options = document.querySelector(".sort");
+  const menu = sortPick.parentElement;
+  const show = (open) => { options.hidden = !open; sortPick.setAttribute("aria-expanded", open); };
+  const showChoice = () => {
+    const choice = options.querySelector('[aria-pressed="true"]');
+    if (choice) sortPick.firstElementChild.textContent = choice.textContent;
+  };
+  showChoice();
+  sortPick.addEventListener("click", () => show(options.hidden));
+  options.addEventListener("click", (e) => {
+    if (!e.target.closest("button")) return;
+    showChoice();
+    show(false);
+    sortPick.focus();
+  });
+  addEventListener("click", (e) => { if (!menu.contains(e.target)) show(false); });
+  menu.addEventListener("focusout", (e) => { if (e.relatedTarget && !menu.contains(e.relatedTarget)) show(false); });
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || options.hidden) return;
+    show(false);
+    sortPick.focus();
+  });
+}
+
+// Expand all / Collapse all. The label follows the rows, however they were opened.
+const foldAll = document.querySelector(".fold-all");
+if (foldAll) {
+  const closedRow = () => document.querySelector(".repos > li > details:not([open])");
+  const label = () => { foldAll.textContent = closedRow() ? "Expand all" : "Collapse all"; };
+  foldAll.addEventListener("click", () => {
+    const open = Boolean(closedRow());
+    document.querySelectorAll(".repos > li > details").forEach((row) => { row.open = open; });
+    label();
+  });
+  document.querySelector(".repos").addEventListener("toggle", label, true);
+}
 
 // Chart tooltip
 const chart = document.querySelector(".chart");
@@ -483,8 +545,7 @@ const FORM_CSS = `
 .repos > .fold { grid-template-columns: 36px minmax(0, 1fr); padding: 16px 0; }
 .repos > .fold > .rank { display: none; }
 /* An open row becomes a panel, so it's clear where it ends and the next one starts. */
-.repos > .fold:has(> details[open]) { margin: 8px -16px; padding: 16px; border-bottom-color: transparent; border-radius: 12px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
-.repos > .fold:has(+ .fold > details[open]) { border-bottom-color: transparent; }
+.repos > .fold:has(> details[open]) { padding-bottom: 22px; border-bottom-color: var(--line-strong); }
 .fold > details > summary { cursor: pointer; list-style: none; }
 .fold > details > summary::-webkit-details-marker { display: none; }
 .fold summary:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 4px; }
@@ -506,7 +567,7 @@ const FORM_CSS = `
 .repo-link:hover { text-decoration-color: var(--ink); }
 .repo-link svg { width: 12px; height: 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0 -52px; }
-.chip, .pr-more button { padding: 5px 10px; border: 0; border-radius: 7px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; transition: background-color .15s, box-shadow .15s, color .15s; }
+.chip, .pr-more button { padding: 5px 10px; border: 0; border-radius: 7px; background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; transition: background-color .15s, box-shadow .15s, color .15s; }
 .chip { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-weight: 400; font-variant-numeric: tabular-nums; }
 .chip[hidden] { display: none; }
 .chip span { color: var(--ink); font-weight: 500; }
@@ -515,42 +576,12 @@ const FORM_CSS = `
 .chip:focus-visible { outline: 2px solid var(--series); outline-offset: 1px; }
 .chip-more { color: var(--ink); font-weight: 500; }
 @media (hover: hover) { .chip:not([aria-pressed="true"]):hover, .pr-more button:hover { box-shadow: inset 0 0 0 1px var(--ink-3); } }
-.sorter { width: auto; gap: 0; }
-.sort-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.sort-menu { position: relative; }
-.sort-pick, .fold-all { padding: 4px 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px; white-space: nowrap; }
-.sort-pick:focus-visible, .fold-all:focus-visible, .sort button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
-.sort-pick { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 500; }
-.sort-pick::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: translateY(-2px) rotate(45deg); transition: transform .15s ease-out; }
-.sort-pick[aria-expanded="true"]::after { transform: translateY(2px) rotate(-135deg); }
-.index-head { justify-content: flex-start; align-items: baseline; gap: 2px 0; }
-.index-head h2 { font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
-.index-head h2 b { color: var(--ink); font-weight: 500; }
-.index-head h2::after { content: ","; }
-.sort-by { margin: 0 6px 0 4px; font-size: 14px; color: var(--ink-2); }
-.index-head .sort-pick { font-size: 14px; }
-.index-head .sort-pick span { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
-.index-head .sort { left: 0; right: auto; }
-.index-head .fold-all { margin-left: auto; }
-.fold-all { color: var(--ink-2); transition: color .15s; }
-.fold-all:hover { color: var(--ink); }
-.sort { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; display: block; min-width: 148px; padding: 4px; border-radius: 9px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0,0,0,.14); }
-.sort[hidden] { display: none; }
-.sort button { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 8px; border-radius: 5px; color: var(--ink); }
-.sort button:hover { background: var(--hover); }
-.sort button[aria-pressed="true"] { background: none; box-shadow: none; }
-.sort button[aria-pressed="true"]:hover { background: var(--hover); }
-.sort button[aria-pressed="true"]::after { content: ""; width: 4px; height: 9px; margin-right: 3px; border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: translateY(-1px) rotate(45deg); }
 .chip-panel { margin-left: -52px; }
 .pr[hidden] { display: none; }
 .pr-more { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; font-size: 13px; }
 .pr-more button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
 .pr-count { margin-left: auto; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
-  .sort button { padding: 10px 8px; }
-  .sort-pick, .fold-all { padding: 10px 0; margin: -6px 0; }
-  .index-head h2 { width: 100%; }
-  .sort-by { margin-left: 0; }
   .fold > details > summary { grid-template-columns: minmax(0, 1fr) 12px; }
   .fold > details > summary::after { grid-column: 2; grid-row: 1 / span 2; }
   .fold .repo-meta { grid-column: 1; grid-row: 2; }
@@ -646,7 +677,7 @@ form[aria-busy="true"] .spin { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; border-right-color: currentColor; opacity: .5; }
-  .fold > details > summary::after, .sort-pick::after { transition: none; }
+  .fold > details > summary::after { transition: none; }
   .meter .fill { transition: none; }
   .finder[data-state="searching"] .meter .fill { width: 100%; opacity: .4; animation: none; }
   .finder h1.who { animation: none; }
@@ -704,44 +735,6 @@ document.querySelector(".repos")?.addEventListener("click", (e) => {
   org.querySelectorAll(".chip:not(.chip-more)").forEach((c) => c.setAttribute("aria-pressed", c === chip));
   org.querySelectorAll(".chip-panel").forEach((p) => { p.hidden = p.id !== chip.getAttribute("aria-controls"); });
 });
-// Sort menu: choosing an option, clicking away, Escape or tabbing out closes it.
-const sortPick = document.querySelector(".sort-pick");
-if (sortPick) {
-  const options = document.querySelector(".sort");
-  const menu = sortPick.parentElement;
-  const show = (open) => { options.hidden = !open; sortPick.setAttribute("aria-expanded", open); };
-  const showChoice = () => {
-    const choice = options.querySelector('[aria-pressed="true"]');
-    if (choice) sortPick.firstElementChild.textContent = choice.textContent;
-  };
-  showChoice();
-  sortPick.addEventListener("click", () => show(options.hidden));
-  options.addEventListener("click", (e) => {
-    if (!e.target.closest("button")) return;
-    showChoice();
-    show(false);
-    sortPick.focus();
-  });
-  addEventListener("click", (e) => { if (!menu.contains(e.target)) show(false); });
-  menu.addEventListener("focusout", (e) => { if (e.relatedTarget && !menu.contains(e.relatedTarget)) show(false); });
-  addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || options.hidden) return;
-    show(false);
-    sortPick.focus();
-  });
-}
-// Expand all / Collapse all. The label follows the rows, however they were opened.
-const foldAll = document.querySelector(".fold-all");
-if (foldAll) {
-  const closedRow = () => document.querySelector(".repos > .fold > details:not([open])");
-  const label = () => { foldAll.textContent = closedRow() ? "Expand all" : "Collapse all"; };
-  foldAll.addEventListener("click", () => {
-    const open = Boolean(closedRow());
-    document.querySelectorAll(".repos > .fold > details").forEach((row) => { row.open = open; });
-    label();
-  });
-  document.querySelector(".repos").addEventListener("toggle", label, true);
-}
 // ?wait=1 is only how the page got here; keep it out of the address bar.
 if (new URLSearchParams(location.search).has("wait")) {
   const clean = new URL(location);
@@ -1123,7 +1116,7 @@ export function contributionsPage(data, config = {}, opts = {}) {
         ["stars", "Stars"], ["recent", "Recent"], ["prs", "Most PRs"],
       ];
 
-  const sortOptions = `<div class="sort" role="group" aria-labelledby="sort-label" style="--n:${sorts.length}"${check ? ` id="sort-options" hidden` : ""}>
+  const sortOptions = `<div class="sort" role="group" aria-labelledby="sort-label" id="sort-options" hidden>
             ${sorts.map(([key, label], i) => `<button type="button" data-sort="${key}" aria-pressed="${i === 0}">${label}</button>`).join("\n            ")}
           </div>`;
   const sortMenu = `<div class="sort-menu">
@@ -1148,8 +1141,8 @@ ${ogImage ? `<meta property="og:image:width" content="1200">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${esc(ogImage ?? profile.avatar_url)}">
-<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>${check ? `
-<noscript><style>html .pr[hidden] { display: grid; } html .chip-panel[hidden] { display: block; } html .chip-panel::before { content: attr(data-name); display: block; margin-top: 16px; font-size: 14px; font-weight: 600; } html .chips, html .pr-more, html .sort-by, html .sort-menu, html .fold-all { display: none; } html .index-head h2::after { content: none; }</style></noscript>` : ""}`;
+<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>
+<noscript><style>html .pr[hidden] { display: grid; } html .chip-panel[hidden] { display: block; } html .chip-panel::before { content: attr(data-name); display: block; margin-top: 16px; font-size: 14px; font-weight: 600; } html .chips, html .pr-more, html .sort-by, html .sort-menu, html .fold-all { display: none; } html .sort-head h2::after { content: none; }</style></noscript>`;
 
   const bar = check
     ? `  <div class="checkbar">
@@ -1182,17 +1175,13 @@ ${config.chart === false ? "" : `    <section aria-labelledby="activity">
     </section>
 `}
     <section aria-labelledby="projects">
-      ${isIndex ? `<div class="section-head index-head">
+      ${repos.length ? `<div class="section-head sort-head">
         <h2 id="projects"><b>${plural(repos.length, "repo")}</b> across <b>${plural(new Set(repos.map((r) => r.owner.login)).size, "org")}</b></h2>
         <span class="sort-by" id="sort-label">sorted by</span>
         ${sortMenu}
-        <button class="fold-all" type="button">Expand all</button>
+        <button class="fold-all" type="button">${isIndex ? "Expand all" : "Collapse all"}</button>
       </div>` : `<div class="section-head">
         <h2 id="projects">Projects</h2>
-        <div class="sorter">
-          <span class="sort-label" id="sort-label">Sort by</span>
-          ${check ? sortMenu : sortOptions}
-        </div>
       </div>`}
       ${repos.length ? `<ol class="repos">${items.map((x, i) => (x.repos ? orgRow(x, i) : repoRow(x, i, { foldLong: check, closed: isIndex }))).join("")}
       </ol>` : `<p class="empty">No merged pull requests to public repos ${esc(name)} doesn't own.</p>`}
