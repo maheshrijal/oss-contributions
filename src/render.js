@@ -169,11 +169,12 @@ const CHIP_LIMIT = 6;
 const prCount = (x) => x.prCount ?? x.prs.length;
 const mostPrsFirst = (a, b) => prCount(b) - prCount(a) || b.stargazerCount - a.stargazerCount;
 
-// GitHub organizations with two or more repos become one group; the rest stay as they are.
+// GitHub organizations with two or more repos become one group; everything else, including
+// repos under a person's account, stays as its own row.
 function groupByOrg(repos) {
   const orgs = new Map();
   for (const repo of repos) {
-    const org = repo.owner.login;
+    const org = repo.owner.__typename === "Organization" ? repo.owner.login : repo.nameWithOwner;
     if (!orgs.has(org)) orgs.set(org, []);
     orgs.get(org).push(repo);
   }
@@ -710,7 +711,10 @@ if (sortPick) {
   const options = document.querySelector(".sort");
   const menu = sortPick.parentElement;
   const show = (open) => { options.hidden = !open; sortPick.setAttribute("aria-expanded", open); };
-  const showChoice = () => { sortPick.firstElementChild.textContent = options.querySelector('[aria-pressed="true"]').textContent; };
+  const showChoice = () => {
+    const choice = options.querySelector('[aria-pressed="true"]');
+    if (choice) sortPick.firstElementChild.textContent = choice.textContent;
+  };
   showChoice();
   sortPick.addEventListener("click", () => show(options.hidden));
   options.addEventListener("click", (e) => {
@@ -1180,7 +1184,7 @@ ${config.chart === false ? "" : `    <section aria-labelledby="activity">
 `}
     <section aria-labelledby="projects">
       ${isIndex ? `<div class="section-head index-head">
-        <h2 id="projects"><b>${plural(repos.length, "repo")}</b> across <b>${plural(items.length, "org")}</b></h2>
+        <h2 id="projects"><b>${plural(repos.length, "repo")}</b> across <b>${plural(new Set(repos.map((r) => r.owner.login)).size, "org")}</b></h2>
         <span class="sort-by" id="sort-label">sorted by</span>
         ${sortMenu}
         <button class="fold-all" type="button">Expand all</button>
