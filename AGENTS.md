@@ -7,11 +7,11 @@ A one-page static site that lists Mahesh's merged pull requests to open-source p
 - `config.json`: everything the owner tunes (sort, priority, exclusions, links).
 - `scripts/fetch.mjs`: pulls PRs from GitHub with the `gh` CLI into `data/prs.json`.
 - `scripts/build.mjs`: reads config and data, writes `dist/index.html` (HTML, CSS and JS in one file).
-- `src/render.js`: draws the page; shared by the build and the Worker.
+- `src/render.js`: draws the pages. The build and the Worker both use it.
 - `src/worker.js`: serves `/check`, `/check/<username>` (any user's merged PRs, live from GitHub) and `/check/<username>/stream` (progress while they load). Not linked from the main page.
 - `scripts/og.mjs`: renders the link-preview image `static/og.png` with local Chrome. Run by hand and commit the PNG.
 - `scripts/dev.mjs`: local server on port 3000 that rebuilds and reloads on changes.
-- `wrangler.jsonc`: Cloudflare config; serves `dist/` at https://oss.mrjl.dev.
+- `wrangler.jsonc`: Cloudflare config. It serves `dist/` at `oss.mrjl.dev`.
 - `.github/workflows/deploy.yml`: fetches, builds and deploys on push to `main` and every 8 hours.
 
 `data/` and `dist/` are generated and git-ignored.
@@ -48,13 +48,13 @@ Keep:
 
 If unsure, ask the owner rather than guessing. Don't remove entries from `excludePRs` without asking.
 
-Ordering: strong code work goes in `priority` at the top; small docs fixes go below it. New repos that deserve a top spot should be suggested to the owner, not added to `priority` silently.
+Ordering: strong code work goes in `priority` at the top. Small docs fixes go below it. If a new repo deserves a top spot, suggest it to the owner. Don't add it to `priority` yourself.
 
 ## Code rules
 
 - No dependencies. Plain Node (20+) and the `gh` CLI only.
 - Keep the output a single static HTML file. No frameworks. No client-side data fetching, except the live progress on `/check`.
-- The `/check` loading page has one state, `data-state` on `.finder`: `searching`, `counting`, `done`, `opening`, `failed`, `missing` or `left`. Change it only through `enter()` and the `NEXT` table in `LOADING_SCRIPT`; CSS and tests read the attribute.
-- Design: minimal, sharp, light and dark themes (follows the system setting; the header toggle overrides it and is saved in `localStorage`), system font. Keep the look consistent with what's there.
+- The `/check` loading page has one state, `data-state` on `.finder`: `searching`, `counting`, `done`, `opening`, `failed`, `missing` or `left`. Change it only through `enter()` and the `NEXT` table in `LOADING_SCRIPT`. CSS and tests read the attribute.
+- Design: minimal and sharp, with the system font and light and dark themes. The theme follows the system setting. The header toggle overrides it and saves the choice in `localStorage`. Keep the look consistent with what's there.
 - After changing `build.mjs` or `src/render.js`, run `npm run build` and look at the page at desktop and phone widths.
 - Don't commit, push or change GitHub settings unless asked.
