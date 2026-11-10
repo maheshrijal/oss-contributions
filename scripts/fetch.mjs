@@ -2,11 +2,25 @@
 // Needs the `gh` CLI, logged in (locally) or GH_TOKEN set (in CI).
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 
 const { user } = JSON.parse(readFileSync("config.json", "utf8"));
 
-const gh = (args) =>
-  execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const gh = async (args) => {
+  const attempts = 3;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    } catch (error) {
+      const message = String(error.stderr || error.message).trim();
+      const transient = /invalid character '<' looking for beginning of value|\bHTTP 5\d\d\b/.test(message);
+      if (!transient || attempt === attempts) throw error;
+      const wait = 2000 * 2 ** (attempt - 1);
+      console.warn(`GitHub API ${args[1]} failed (${attempt}/${attempts}): ${message}. Retrying in ${wait / 1000}s.`);
+      await delay(wait);
+    }
+  }
+};
 
 const query = `
 query($q: String!, $endCursor: String) {
@@ -27,11 +41,11 @@ query($q: String!, $endCursor: String) {
 
 // `-user:` drops repos you own; `is:public` drops private/work repos.
 const q = `author:${user} type:pr is:public -user:${user}`;
-const prs = gh([
+const prs = (await gh([
   "api", "graphql", "--paginate",
   "-f", `query=${query}`, "-f", `q=${q}`,
   "--jq", ".data.search.nodes[]",
-])
+]))
   .trim()
   .split("\n")
   .filter(Boolean)
@@ -39,7 +53,7 @@ const prs = gh([
   .filter((pr) => pr.repository && !pr.repository.isPrivate);
 
 const profile = JSON.parse(
-  gh(["api", `users/${user}`, "--jq", "{login,name,bio,avatar_url,html_url}"]),
+  await gh(["api", `users/${user}`, "--jq", "{login,name,bio,avatar_url,html_url}"]),
 );
 
 mkdirSync("data", { recursive: true });
