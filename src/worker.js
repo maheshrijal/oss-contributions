@@ -12,6 +12,20 @@ const SEARCH_LIMIT = 1000;
 // GitHub's username rules: letters, digits and single hyphens, up to 39 characters.
 const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
+// ?months=N and ?years=N keep only PRs opened in that window. Both together add up.
+// Returns the total months, or 0 for no filter.
+function monthsBack(params) {
+  const n = (key) => (/^\d{1,3}$/.test(params.get(key) ?? "") ? Number(params.get(key)) : 0);
+  return n("months") + n("years") * 12;
+}
+
+// The first day counted: today minus that many months, as YYYY-MM-DD.
+function since(months) {
+  const d = new Date();
+  d.setUTCMonth(d.getUTCMonth() - months);
+  return d.toISOString().slice(0, 10);
+}
+
 const query = `
 query($login: String!, $q: String!, $after: String) {
   user(login: $login) { login name bio avatarUrl url }
@@ -70,8 +84,9 @@ const mostStarred = (prs) =>
 
 // Same search as scripts/fetch.mjs, plus is:merged. Returns null if there's no such user.
 // onPage, if given, hears about each page as it arrives.
-async function load(token, login, onPage) {
-  const q = `author:${login} type:pr is:public is:merged -user:${login}`;
+// months, if not 0, keeps only PRs opened in the last that many months.
+async function load(token, login, months, onPage) {
+  const q = `author:${login} type:pr is:public is:merged -user:${login}` + (months ? ` created:>=${since(months)}` : "");
   let user, total, remaining;
   const prs = [];
   let after = null;
@@ -119,7 +134,7 @@ const resultPage = (data) =>
 
 // One JSON object per line: progress for each page of PRs, then done or error.
 // The finished page goes in the cache, and the browser opens it from there.
-function progressStream(env, ctx, login, key) {
+function progressStream(env, ctx, login, months, key) {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
@@ -130,7 +145,7 @@ function progressStream(env, ctx, login, key) {
       try {
         if (!(await caches.default.match(key))) {
           // A failed send means the visitor left, which ends the search too.
-          const data = await load(env.GITHUB_TOKEN, login, (page) => send({ type: "progress", ...page }));
+          const data = await load(env.GITHUB_TOKEN, login, months, (page) => send({ type: "progress", ...page }));
           if (!data) return await send({ type: "error", missing: true, message: notFound(login) });
           // If this fails, the page's ?wait=1 fallback fetches the result again.
           await caches.default.put(key, resultPage(data)).catch(console.error);
@@ -168,20 +183,22 @@ export default {
     const login = decodeURIComponent(match[1]);
     if (!USERNAME.test(login)) return html(checkPage({ user: login, error: invalid(login) }), 400);
 
-    // One cache entry per user, whatever the case or ?sort= in the URL.
-    const key = new Request(`${url.origin}/check/${login.toLowerCase()}`);
-    if (match[2]) return progressStream(env, ctx, login, key);
+    // One cache entry per user and time filter, whatever the case or ?sort= in the URL.
+    const months = monthsBack(url.searchParams);
+    const filter = months ? `months=${months}` : "";
+    const key = new Request(`${url.origin}/check/${login.toLowerCase()}${filter ? `?${filter}` : ""}`);
+    if (match[2]) return progressStream(env, ctx, login, months, key);
 
     const hit = await caches.default.match(key);
     if (hit) return hit;
 
     // Show live progress right away. ?wait=1 waits for the whole result instead, for
     // browsers without JavaScript or the rare finished page that didn't reach the cache.
-    if (!url.searchParams.has("wait")) return html(checkPage({ user: login, loading: true }));
+    if (!url.searchParams.has("wait")) return html(checkPage({ user: login, loading: true, filter }));
 
     let data;
     try {
-      data = await load(env.GITHUB_TOKEN, login);
+      data = await load(env.GITHUB_TOKEN, login, months);
     } catch (err) {
       console.error(err);
       if (err instanceof RateLimited) {

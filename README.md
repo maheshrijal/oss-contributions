@@ -53,7 +53,7 @@ Cloudflare creates and owns the `oss.mrjl.dev` DNS record, as it does for other 
 
 ## /check
 
-`/check` is a form. It sends the visitor to `/check/<username>`, which lists that user's merged PRs. `src/worker.js` handles these routes, and `src/render.js` draws the pages. The main page uses the same `src/render.js`. The main page doesn't link to `/check`, and the `/check` pages tell search engines not to index them.
+`/check` is a form. It sends the visitor to `/check/<username>`, which lists that user's merged PRs. Add `?months=N` or `?years=N` to show only PRs opened in that window, for example `/check/<username>?months=12`. Both together add up: `?years=1&months=6` means the last 18 months. `src/worker.js` handles these routes, and `src/render.js` draws the pages. The main page uses the same `src/render.js`. The main page doesn't link to `/check`, and the `/check` pages tell search engines not to index them.
 
 While a result loads, the page reads live progress from `/check/<username>/stream`. The stream sends one JSON line for each page of PRs. When the list is complete, the page opens the finished result from the cache. During long waits on desktop, the page offers a browser notification, which works only while the tab stays open. Without JavaScript, the page loads `?wait=1` instead, which returns the whole result in one response.
 

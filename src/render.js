@@ -877,7 +877,7 @@ const onDone = () => {
   fill.style.width = "100%";
   repoLine.textContent = "";
   document.title = "Done: " + user;
-  const open = () => { if (enter("opening")) location.replace(location.pathname + "?wait=1"); };
+  const open = () => { if (enter("opening")) { const next = new URL(location); next.searchParams.set("wait", "1"); location.replace(next); } };
   const hold = stillMotion ? 0 : 250;
   // A notification's click needs this page still open, so wait until they come back.
   if (tell(user + " is ready", summary + ".")) {
@@ -1212,18 +1212,20 @@ const EXAMPLES = ["rauchg", "kelseyhightower", "tj"];
 
 // The form page; also used for "not found" and other errors.
 // opts.loading: the same page while that user's PRs are fetched, with live progress.
-export function checkPage({ user = "", error = "", loading = false } = {}) {
+// opts.filter: the time filter, like "months=12", passed on to the stream and ?wait=1.
+export function checkPage({ user = "", error = "", loading = false, filter = "" } = {}) {
   const path = `/check/${encodeURIComponent(user)}`;
+  const and = filter ? `${filter}&` : "";
   const head = `<title>${loading ? `Checking ${esc(user)}` : "Check open-source contributions"}</title>
 <meta name="description" content="See the merged pull requests any GitHub user has made to open-source projects they don't own.">
 <meta name="robots" content="noindex">
-${loading ? `<noscript><meta http-equiv="refresh" content="0; url=${esc(path)}?wait=1"></noscript>\n` : ""}<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icons.merged.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" fill="#0ca30c" `))}">`;
+${loading ? `<noscript><meta http-equiv="refresh" content="0; url=${esc(path)}?${and}wait=1"></noscript>\n` : ""}<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icons.merged.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" fill="#0ca30c" `))}">`;
   const body = `  <header class="home">
     <a href="/check">Check contributions</a>
     ${THEME_BUTTON}
   </header>
 
-  <main id="main" class="finder"${loading ? ` data-state="searching" data-stream="${esc(path)}/stream"` : ""}>
+  <main id="main" class="finder"${loading ? ` data-state="searching" data-stream="${esc(path)}/stream${filter ? `?${filter}` : ""}"` : ""}>
     <h1>See anyone’s open-source contributions</h1>
     <form class="lookup" action="/check" method="get" role="search">
       <label class="field"${loading ? ` style="--chars:${11 + user.length}"` : ""}>
