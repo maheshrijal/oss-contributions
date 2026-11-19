@@ -444,8 +444,9 @@ sortButtons.forEach((btn) => btn.addEventListener("click", () => {
   history.replaceState(null, "", url);
 }));
 // The page is drawn in featured order; the first menu option is the default view.
-const initial = new URLSearchParams(location.search).get("sort");
-if (sortButtons.length) sortBy(by[initial] ? initial : sortButtons[0].dataset.sort);
+const wanted = new URLSearchParams(location.search).get("sort");
+const initial = sortButtons.find((b) => b.dataset.sort === wanted) ?? sortButtons[0];
+if (initial) sortBy(initial.dataset.sort);
 
 // Sort menu: choosing an option, clicking away, Escape or tabbing out closes it.
 const sortPick = document.querySelector(".sort-pick");
