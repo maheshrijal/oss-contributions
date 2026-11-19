@@ -15,8 +15,8 @@ const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 // ?months=N and ?years=N keep only PRs opened in that window. Both together add up.
 // Returns the total months, or 0 for no filter.
 function monthsBack(params) {
-  const n = (key) => (/^\d{1,4}$/.test(params.get(key) ?? "") ? Number(params.get(key)) : 0);
-  // At most 100 years, so the total still passes the 4-digit check when passed on as ?months=.
+  const n = (key) => (/^\d+$/.test(params.get(key) ?? "") ? Number(params.get(key)) : 0);
+  // At most 100 years, so the date math stays sane.
   return Math.min(n("months") + n("years") * 12, 1200);
 }
 
