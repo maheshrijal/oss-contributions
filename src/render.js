@@ -443,8 +443,9 @@ sortButtons.forEach((btn) => btn.addEventListener("click", () => {
   if (key === sortButtons[0].dataset.sort) url.searchParams.delete("sort"); else url.searchParams.set("sort", key);
   history.replaceState(null, "", url);
 }));
+// The page is drawn in featured order; the first menu option is the default view.
 const initial = new URLSearchParams(location.search).get("sort");
-if (by[initial]) sortBy(initial);
+if (list && sortButtons.length) sortBy(by[initial] ? initial : sortButtons[0].dataset.sort);
 
 // Sort menu: choosing an option, clicking away, Escape or tabbing out closes it.
 const sortPick = document.querySelector(".sort-pick");
@@ -1113,8 +1114,9 @@ export function contributionsPage(data, config = {}, opts = {}) {
   const sorts = isIndex
     ? [["prs", "Most PRs"], ["stars", "Stars"], ["recent", "Recent"]]
     : [
+        ["stars", "Stars"],
         ...((config.priority ?? []).length ? [["featured", "Featured"]] : []),
-        ["stars", "Stars"], ["recent", "Recent"], ["prs", "Most PRs"],
+        ["recent", "Recent"], ["prs", "Most PRs"],
       ];
 
   const sortOptions = `<div class="sort" role="group" aria-labelledby="sort-label" id="sort-options" hidden>
