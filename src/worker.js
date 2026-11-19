@@ -14,14 +14,18 @@ const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
 // ?months=N and ?years=N keep only PRs opened in that window. Both together add up.
 // Larger values are cut to the limit, at most 12 months and 5 years, to spare
-// GitHub's rate limit. Returns the total months (0 for no filter) and the query
-// string to pass on, which gives the same result when read again.
+// GitHub's rate limit. Returns the total months (0 for no filter), the query
+// string to pass on, which gives the same result when read again, and the
+// window in words for the page, like "12 months" or "year".
 function timeFilter(params) {
   const n = (key, max) => (/^\d+$/.test(params.get(key) ?? "") ? Math.min(Number(params.get(key)), max) : 0);
   const months = n("months", 12);
   const years = n("years", 5);
   const filter = [years && `years=${years}`, months && `months=${months}`].filter(Boolean).join("&");
-  return { months: months + years * 12, filter };
+  const unit = (count, word) => (count === 1 ? `1 ${word}` : `${count} ${word}s`);
+  const span = [years && unit(years, "year"), months && unit(months, "month")].filter(Boolean).join(" and ");
+  const window = span === "1 year" ? "year" : span === "1 month" ? "month" : span;
+  return { months: months + years * 12, filter, window };
 }
 
 // The first day counted: today minus that many months, as YYYY-MM-DD.
@@ -139,12 +143,12 @@ const html = (body, status = 200, cache = "no-store") =>
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, "x-robots-tag": "noindex" },
   });
 
-const resultPage = (data) =>
-  html(contributionsPage(data, { chart: false }, { check: true, capped: data.capped }).html, 200, `public, max-age=${CACHE_SECONDS}`);
+const resultPage = (data, window) =>
+  html(contributionsPage(data, { chart: false }, { check: true, capped: data.capped, window }).html, 200, `public, max-age=${CACHE_SECONDS}`);
 
 // One JSON object per line: progress for each page of PRs, then done or error.
 // The finished page goes in the cache, and the browser opens it from there.
-function progressStream(env, ctx, login, months, key) {
+function progressStream(env, ctx, login, months, window, key) {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
@@ -158,7 +162,7 @@ function progressStream(env, ctx, login, months, key) {
           const data = await load(env.GITHUB_TOKEN, login, months, (page) => send({ type: "progress", ...page }));
           if (!data) return await send({ type: "error", missing: true, message: notFound(login) });
           // If this fails, the page's ?wait=1 fallback fetches the result again.
-          await caches.default.put(key, resultPage(data)).catch(console.error);
+          await caches.default.put(key, resultPage(data, window)).catch(console.error);
         }
         await send({ type: "done" });
       } catch (err) {
@@ -194,9 +198,9 @@ export default {
     if (!USERNAME.test(login)) return html(checkPage({ user: login, error: invalid(login) }), 400);
 
     // One cache entry per user and time filter, whatever the case or ?sort= in the URL.
-    const { months, filter } = timeFilter(url.searchParams);
+    const { months, filter, window } = timeFilter(url.searchParams);
     const key = new Request(`${url.origin}/check/${login.toLowerCase()}${filter ? `?${filter}` : ""}`);
-    if (match[2]) return progressStream(env, ctx, login, months, key);
+    if (match[2]) return progressStream(env, ctx, login, months, window, key);
 
     const hit = await caches.default.match(key);
     if (hit) return hit;
@@ -219,7 +223,7 @@ export default {
     }
     if (!data) return html(checkPage({ user: login, error: notFound(login) }), 404);
 
-    const res = resultPage(data);
+    const res = resultPage(data, window);
     ctx.waitUntil(caches.default.put(key, res.clone()));
     return res;
   },

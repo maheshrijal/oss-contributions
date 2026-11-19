@@ -1062,7 +1062,9 @@ export function rank(allPrs, config = {}, { showAll = false } = {}) {
 export function contributionsPage(data, config = {}, opts = {}) {
   const { fetchedAt, profile } = data;
   const { prs, repos } = rank(data.prs, config, opts);
-  const { ogImage = null, check = false, capped = false } = opts;
+  // opts.window: on /check with a time filter, that window in words, like "12 months".
+  const { ogImage = null, check = false, capped = false, window = "" } = opts;
+  const opened = window ? ` opened in the last ${esc(window)}` : "";
   const isIndex = check && repos.length >= INDEX_MIN_REPOS;
   const items = isIndex ? groupByOrg(repos) : repos;
 
@@ -1165,6 +1167,7 @@ ${ogImage ? `<meta property="og:image:width" content="1200">
     <section class="hero">
       <p class="num">${prs.length}</p>
       <p class="lede">merged pull requests to <b>${repos.length} open-source projects</b> with ${compact(totalStars)} stars between them.</p>
+      ${window && prs.length ? `<p class="note">Only pull requests${opened}.</p>` : ""}
       ${capped ? `<p class="note">GitHub search returns at most 1,000 pull requests, so older ones may be missing.</p>` : ""}
     </section>
 
@@ -1183,7 +1186,7 @@ ${config.chart === false ? "" : `    <section aria-labelledby="activity">
         <h2 id="projects">Projects</h2>
       </div>`}
       ${repos.length ? `<ol class="repos">${items.map((x, i) => (x.repos ? orgRow(x, i) : repoRow(x, i, { foldLong: check, closed: isIndex }))).join("")}
-      </ol>` : `<p class="empty">No merged pull requests to public repos ${esc(name)} doesn't own.</p>`}
+      </ol>` : `<p class="empty">No merged pull requests${opened} to public repos ${esc(name)} doesn't own.</p>`}
     </section>
   </main>
 
