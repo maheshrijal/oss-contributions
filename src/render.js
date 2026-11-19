@@ -877,7 +877,7 @@ const onDone = () => {
   fill.style.width = "100%";
   repoLine.textContent = "";
   document.title = "Done: " + user;
-  const open = () => { if (enter("opening")) location.replace(location.pathname + "?wait=1"); };
+  const open = () => { if (enter("opening")) { const next = new URL(location); next.searchParams.set("wait", "1"); location.replace(next); } };
   const hold = stillMotion ? 0 : 250;
   // A notification's click needs this page still open, so wait until they come back.
   if (tell(user + " is ready", summary + ".")) {
@@ -1062,7 +1062,9 @@ export function rank(allPrs, config = {}, { showAll = false } = {}) {
 export function contributionsPage(data, config = {}, opts = {}) {
   const { fetchedAt, profile } = data;
   const { prs, repos } = rank(data.prs, config, opts);
-  const { ogImage = null, check = false, capped = false } = opts;
+  // opts.window: on /check with a time filter, that window in words, like "12 months".
+  const { ogImage = null, check = false, capped = false, window = "" } = opts;
+  const opened = window ? ` opened in the last ${esc(window)}` : "";
   const isIndex = check && repos.length >= INDEX_MIN_REPOS;
   const items = isIndex ? groupByOrg(repos) : repos;
 
@@ -1165,6 +1167,7 @@ ${ogImage ? `<meta property="og:image:width" content="1200">
     <section class="hero">
       <p class="num">${prs.length}</p>
       <p class="lede">merged pull requests to <b>${repos.length} open-source projects</b> with ${compact(totalStars)} stars between them.</p>
+      ${window && prs.length ? `<p class="note">Only pull requests${opened}.</p>` : ""}
       ${capped ? `<p class="note">GitHub search returns at most 1,000 pull requests, so older ones may be missing.</p>` : ""}
     </section>
 
@@ -1183,7 +1186,7 @@ ${config.chart === false ? "" : `    <section aria-labelledby="activity">
         <h2 id="projects">Projects</h2>
       </div>`}
       ${repos.length ? `<ol class="repos">${items.map((x, i) => (x.repos ? orgRow(x, i) : repoRow(x, i, { foldLong: check, closed: isIndex }))).join("")}
-      </ol>` : `<p class="empty">No merged pull requests to public repos ${esc(name)} doesn't own.</p>`}
+      </ol>` : `<p class="empty">No merged pull requests${opened} to public repos ${esc(name)} doesn't own.</p>`}
     </section>
   </main>
 
@@ -1212,18 +1215,20 @@ const EXAMPLES = ["rauchg", "kelseyhightower", "tj"];
 
 // The form page; also used for "not found" and other errors.
 // opts.loading: the same page while that user's PRs are fetched, with live progress.
-export function checkPage({ user = "", error = "", loading = false } = {}) {
+// opts.filter: the time filter, like "months=12", passed on to the stream and ?wait=1.
+export function checkPage({ user = "", error = "", loading = false, filter = "" } = {}) {
   const path = `/check/${encodeURIComponent(user)}`;
+  const and = filter ? `${filter}&` : "";
   const head = `<title>${loading ? `Checking ${esc(user)}` : "Check open-source contributions"}</title>
 <meta name="description" content="See the merged pull requests any GitHub user has made to open-source projects they don't own.">
 <meta name="robots" content="noindex">
-${loading ? `<noscript><meta http-equiv="refresh" content="0; url=${esc(path)}?wait=1"></noscript>\n` : ""}<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icons.merged.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" fill="#0ca30c" `))}">`;
+${loading ? `<noscript><meta http-equiv="refresh" content="0; url=${esc(path)}?${and}wait=1"></noscript>\n` : ""}<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(icons.merged.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" fill="#0ca30c" `))}">`;
   const body = `  <header class="home">
     <a href="/check">Check contributions</a>
     ${THEME_BUTTON}
   </header>
 
-  <main id="main" class="finder"${loading ? ` data-state="searching" data-stream="${esc(path)}/stream"` : ""}>
+  <main id="main" class="finder"${loading ? ` data-state="searching" data-stream="${esc(path)}/stream${filter ? `?${filter}` : ""}"` : ""}>
     <h1>See anyone’s open-source contributions</h1>
     <form class="lookup" action="/check" method="get" role="search">
       <label class="field"${loading ? ` style="--chars:${11 + user.length}"` : ""}>

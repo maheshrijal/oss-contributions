@@ -12,6 +12,34 @@ const SEARCH_LIMIT = 1000;
 // GitHub's username rules: letters, digits and single hyphens, up to 39 characters.
 const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
+// ?months=N and ?years=N keep only PRs opened in that window. Both together add up.
+// Larger values are cut to the limit, at most 12 months and 5 years, to spare
+// GitHub's rate limit. Returns the total months (0 for no filter), the query
+// string to pass on, which gives the same result when read again, and the
+// window in words for the page, like "12 months" or "year".
+function timeFilter(params) {
+  const n = (key, max) => (/^\d+$/.test(params.get(key) ?? "") ? Math.min(Number(params.get(key)), max) : 0);
+  const months = n("months", 12);
+  const years = n("years", 5);
+  const filter = [years && `years=${years}`, months && `months=${months}`].filter(Boolean).join("&");
+  const unit = (count, word) => (count === 1 ? `1 ${word}` : `${count} ${word}s`);
+  const span = [years && unit(years, "year"), months && unit(months, "month")].filter(Boolean).join(" and ");
+  const window = span === "1 year" ? "year" : span === "1 month" ? "month" : span;
+  return { months: months + years * 12, filter, window };
+}
+
+// The first day counted: today minus that many months, as YYYY-MM-DD.
+// March 31 minus one month is February 28 (or 29), not March 3.
+function since(months) {
+  const d = new Date();
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - months);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return d.toISOString().slice(0, 10);
+}
+
 const query = `
 query($login: String!, $q: String!, $after: String) {
   user(login: $login) { login name bio avatarUrl url }
@@ -70,8 +98,9 @@ const mostStarred = (prs) =>
 
 // Same search as scripts/fetch.mjs, plus is:merged. Returns null if there's no such user.
 // onPage, if given, hears about each page as it arrives.
-async function load(token, login, onPage) {
-  const q = `author:${login} type:pr is:public is:merged -user:${login}`;
+// months, if not 0, keeps only PRs opened in the last that many months.
+async function load(token, login, months, onPage) {
+  const q = `author:${login} type:pr is:public is:merged -user:${login}` + (months ? ` created:>=${since(months)}` : "");
   let user, total, remaining;
   const prs = [];
   let after = null;
@@ -114,12 +143,12 @@ const html = (body, status = 200, cache = "no-store") =>
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": cache, "x-robots-tag": "noindex" },
   });
 
-const resultPage = (data) =>
-  html(contributionsPage(data, { chart: false }, { check: true, capped: data.capped }).html, 200, `public, max-age=${CACHE_SECONDS}`);
+const resultPage = (data, window) =>
+  html(contributionsPage(data, { chart: false }, { check: true, capped: data.capped, window }).html, 200, `public, max-age=${CACHE_SECONDS}`);
 
 // One JSON object per line: progress for each page of PRs, then done or error.
 // The finished page goes in the cache, and the browser opens it from there.
-function progressStream(env, ctx, login, key) {
+function progressStream(env, ctx, login, months, window, key) {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
@@ -130,10 +159,10 @@ function progressStream(env, ctx, login, key) {
       try {
         if (!(await caches.default.match(key))) {
           // A failed send means the visitor left, which ends the search too.
-          const data = await load(env.GITHUB_TOKEN, login, (page) => send({ type: "progress", ...page }));
+          const data = await load(env.GITHUB_TOKEN, login, months, (page) => send({ type: "progress", ...page }));
           if (!data) return await send({ type: "error", missing: true, message: notFound(login) });
           // If this fails, the page's ?wait=1 fallback fetches the result again.
-          await caches.default.put(key, resultPage(data)).catch(console.error);
+          await caches.default.put(key, resultPage(data, window)).catch(console.error);
         }
         await send({ type: "done" });
       } catch (err) {
@@ -168,20 +197,21 @@ export default {
     const login = decodeURIComponent(match[1]);
     if (!USERNAME.test(login)) return html(checkPage({ user: login, error: invalid(login) }), 400);
 
-    // One cache entry per user, whatever the case or ?sort= in the URL.
-    const key = new Request(`${url.origin}/check/${login.toLowerCase()}`);
-    if (match[2]) return progressStream(env, ctx, login, key);
+    // One cache entry per user and time filter, whatever the case or ?sort= in the URL.
+    const { months, filter, window } = timeFilter(url.searchParams);
+    const key = new Request(`${url.origin}/check/${login.toLowerCase()}${filter ? `?${filter}` : ""}`);
+    if (match[2]) return progressStream(env, ctx, login, months, window, key);
 
     const hit = await caches.default.match(key);
     if (hit) return hit;
 
     // Show live progress right away. ?wait=1 waits for the whole result instead, for
     // browsers without JavaScript or the rare finished page that didn't reach the cache.
-    if (!url.searchParams.has("wait")) return html(checkPage({ user: login, loading: true }));
+    if (!url.searchParams.has("wait")) return html(checkPage({ user: login, loading: true, filter }));
 
     let data;
     try {
-      data = await load(env.GITHUB_TOKEN, login);
+      data = await load(env.GITHUB_TOKEN, login, months);
     } catch (err) {
       console.error(err);
       if (err instanceof RateLimited) {
@@ -193,7 +223,7 @@ export default {
     }
     if (!data) return html(checkPage({ user: login, error: notFound(login) }), 404);
 
-    const res = resultPage(data);
+    const res = resultPage(data, window);
     ctx.waitUntil(caches.default.put(key, res.clone()));
     return res;
   },
