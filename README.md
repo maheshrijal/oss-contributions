@@ -36,7 +36,7 @@ npm run og      # re-render static/og.png, the link-preview image (needs Chrome)
 | `site.noindex` | `true` adds a robots meta tag and a `robots.txt` that keep search engines out |
 | `site.title`, `site.links` | Page title and header links |
 
-Repos in `priority` come first. The rest follow `sort`, and ties go to the repo with more stars. This order is the page's default "Featured" view. Visitors can also sort by stars, most recent merge, or number of PRs from the menu above the list.
+Repos in `priority` come first. The rest follow `sort`, and ties go to the repo with more stars. This order is the "Featured" view. The page opens sorted by stars; visitors can switch to Featured, most recent merge, or number of PRs from the menu above the list.
 
 ## Deploy
 
