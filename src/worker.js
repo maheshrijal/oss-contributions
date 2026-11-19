@@ -13,11 +13,15 @@ const SEARCH_LIMIT = 1000;
 const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
 // ?months=N and ?years=N keep only PRs opened in that window. Both together add up.
-// Returns the total months, or 0 for no filter.
-function monthsBack(params) {
-  const n = (key) => (/^\d+$/.test(params.get(key) ?? "") ? Number(params.get(key)) : 0);
-  // At most 100 years, so the date math stays sane.
-  return Math.min(n("months") + n("years") * 12, 1200);
+// Larger values are cut to the limit, at most 12 months and 5 years, to spare
+// GitHub's rate limit. Returns the total months (0 for no filter) and the query
+// string to pass on, which gives the same result when read again.
+function timeFilter(params) {
+  const n = (key, max) => (/^\d+$/.test(params.get(key) ?? "") ? Math.min(Number(params.get(key)), max) : 0);
+  const months = n("months", 12);
+  const years = n("years", 5);
+  const filter = [years && `years=${years}`, months && `months=${months}`].filter(Boolean).join("&");
+  return { months: months + years * 12, filter };
 }
 
 // The first day counted: today minus that many months, as YYYY-MM-DD.
@@ -190,8 +194,7 @@ export default {
     if (!USERNAME.test(login)) return html(checkPage({ user: login, error: invalid(login) }), 400);
 
     // One cache entry per user and time filter, whatever the case or ?sort= in the URL.
-    const months = monthsBack(url.searchParams);
-    const filter = months ? `months=${months}` : "";
+    const { months, filter } = timeFilter(url.searchParams);
     const key = new Request(`${url.origin}/check/${login.toLowerCase()}${filter ? `?${filter}` : ""}`);
     if (match[2]) return progressStream(env, ctx, login, months, key);
 
