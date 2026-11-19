@@ -15,14 +15,20 @@ const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 // ?months=N and ?years=N keep only PRs opened in that window. Both together add up.
 // Returns the total months, or 0 for no filter.
 function monthsBack(params) {
-  const n = (key) => (/^\d{1,3}$/.test(params.get(key) ?? "") ? Number(params.get(key)) : 0);
-  return n("months") + n("years") * 12;
+  const n = (key) => (/^\d{1,4}$/.test(params.get(key) ?? "") ? Number(params.get(key)) : 0);
+  // At most 100 years, so the total still passes the 4-digit check when passed on as ?months=.
+  return Math.min(n("months") + n("years") * 12, 1200);
 }
 
 // The first day counted: today minus that many months, as YYYY-MM-DD.
+// March 31 minus one month is February 28 (or 29), not March 3.
 function since(months) {
   const d = new Date();
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
   d.setUTCMonth(d.getUTCMonth() - months);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
   return d.toISOString().slice(0, 10);
 }
 
