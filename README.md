@@ -59,7 +59,7 @@ While a result loads, the page reads live progress from `/check/<username>/strea
 
 If the site runs out of GitHub's hourly limit, visitors see when to try again. The Worker writes the remaining limit to Workers Logs as `github_rate_limit_remaining`. Visitors don't see it.
 
-Accounts with 10 or more repos get a shorter list. It has one closed row for each GitHub org or lone repo, with repo chips inside each org, and an **Expand all** button. On any `/check` page, a long PR list shows 10 PRs first, with a button to show more.
+Accounts with 10 or more repos get a shorter list. It has one closed row for each GitHub org or lone repo, with its repos listed inside each org (the top three open with their 3 newest PRs, the rest as closed rows; an org with four repos or fewer shows them all), and an **Expand all** button. Every other long PR list on a `/check` page shows 10 PRs first, with a button to show more.
 
 The Worker needs a `GITHUB_TOKEN` secret: a fine-grained GitHub token with read-only access to public repositories. Set it with `npx wrangler versions secret put GITHUB_TOKEN`.
 

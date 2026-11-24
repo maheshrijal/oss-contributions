@@ -109,14 +109,15 @@ const prRow = (pr, hidden = false) => `
 const PR_LIMIT = 10;
 const plural = (n, word) => `${n.toLocaleString("en-US")} ${word}${n === 1 ? "" : "s"}`;
 
-const prList = (prs, foldLong) => {
+// first: how many PRs show before the "Show more" button.
+const prList = (prs, foldLong, first = PR_LIMIT) => {
   // Hiding a single PR behind a click saves nothing.
-  const shown = foldLong && prs.length > PR_LIMIT + 1 ? PR_LIMIT : prs.length;
+  const shown = foldLong && prs.length > first + 1 ? first : prs.length;
   const rows = prs.map((pr, n) => prRow(pr, n >= shown)).join("");
   const left = prs.length - shown;
   return `<ul class="prs">${rows}
           </ul>${left ? `
-          <div class="pr-more" data-limit="${PR_LIMIT}">
+          <div class="pr-more" data-first="${first}" data-limit="${PR_LIMIT}">
             <button class="show-more" type="button">Show ${Math.min(left, PR_LIMIT)} more</button>
             <button class="show-less" type="button" hidden>Collapse</button>
             <span class="pr-count" aria-live="polite">${shown} of ${prs.length.toLocaleString("en-US")}</span>
@@ -165,8 +166,9 @@ const repoRow = (r, i, { foldLong = false, closed = false } = {}) => {
 // From this many repos on, a /check page becomes an index: every row starts closed.
 const INDEX_MIN_REPOS = 10;
 
-// Show this many repo chips before folding the rest behind a "more" chip.
-const CHIP_LIMIT = 6;
+// In an org, this many repos show their newest PRs; the rest are one-line rows that open in place.
+const OPEN_REPOS = 3;
+const OPEN_PRS = 3;
 
 const prCount = (x) => x.prCount ?? x.prs.length;
 const mostPrsFirst = (a, b) => prCount(b) - prCount(a) || b.stargazerCount - a.stargazerCount;
@@ -196,19 +198,28 @@ function groupByOrg(repos) {
     .sort(mostPrsFirst);
 }
 
-// One repo's PRs show at a time; the chips choose which. Without JavaScript the first still shows.
 const orgRow = (g, i) => {
-  const shown = g.repos.length > CHIP_LIMIT + 1 ? CHIP_LIMIT : g.repos.length;
-  const panelId = (n) => `org-${i}-repo-${n}`;
-  const chips = g.repos.map((r, n) => {
-    const name = r.nameWithOwner.split("/")[1];
-    return `<button class="chip" type="button" aria-pressed="${n === 0}" aria-controls="${panelId(n)}" aria-label="${esc(name)}, ${plural(r.prs.length, "PR")}"${n < shown ? "" : " hidden"}><span translate="no">${esc(name)}</span>${r.prs.length.toLocaleString("en-US")}</button>`;
+  // Folding a single repo saves nothing.
+  const open = g.repos.length > OPEN_REPOS + 1 ? OPEN_REPOS : g.repos.length;
+  const subs = g.repos.map((r, n) => {
+    const name = esc(r.nameWithOwner.split("/")[1]);
+    const meta = `<span class="repo-meta"><span>${plural(r.prs.length, "PR")}</span><span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(r.stargazerCount)}</span></span>`;
+    return n < open
+      ? `
+            <section class="sub">
+              <div class="repo-head"><a class="sub-name" href="${esc(r.url)}" target="_blank" rel="noopener" translate="no">${name}</a>${meta}</div>
+              ${r.description ? `<p class="desc">${esc(r.description)}</p>` : ""}
+              ${prList(r.prs, true, OPEN_PRS)}
+            </section>`
+      : `
+            <details class="sub">
+              <summary><span class="sub-name" translate="no">${name}</span>${meta}</summary>
+              <div class="sub-body">
+                ${repoLinkLine(r)}
+                ${prList(r.prs, true)}
+              </div>
+            </details>`;
   });
-  const panels = g.repos.map((r, n) => `
-          <div class="chip-panel" id="${panelId(n)}" data-name="${esc(r.nameWithOwner.split("/")[1])}"${n === 0 ? "" : " hidden"}>
-            ${repoLinkLine(r)}
-            ${prList(r.prs, true)}
-          </div>`);
   return `
       <li class="repo fold org" data-featured="${i}" data-stars="${g.stargazerCount}" data-recent="${g.recent}" data-prs="${g.prCount}">
         <span class="rank" aria-hidden="true">${i + 1}</span>
@@ -218,7 +229,8 @@ const orgRow = (g, i) => {
             <span class="fold-name" translate="no">${esc(g.name)}</span>
             <span class="repo-meta"><span>${plural(g.prCount, "PR")} in ${g.repos.length} repos</span><span class="stars">${icon("star")}<span class="sr">Stars: </span>${compact(g.stargazerCount)}</span></span>
           </summary>
-          <div class="chips" role="group" aria-label="Repos in ${esc(g.name)}">${chips.join("")}${shown < g.repos.length ? `<button class="chip chip-more" type="button">${g.repos.length - shown} more</button>` : ""}</div>${panels.join("")}
+          <div class="subs">${subs.join("")}
+          </div>
         </details>
       </li>`;
 };
@@ -562,22 +574,29 @@ const FORM_CSS = `
 .fold > details > .pr-more { margin-left: -24px; }
 .fold-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 14px; }
 /* Full text in the darker ink: it is the one line that says what the repo is. */
-.fold-top .desc { flex: 1; min-width: 0; margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); white-space: normal; overflow: visible; text-overflow: clip; }
+.fold-top .desc { flex: 1; min-width: 0; margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip; }
 .fold-top .repo-link { margin-left: auto; }
 .repo-link { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; transition: text-decoration-color .15s; }
 .repo-link:hover { text-decoration-color: var(--ink); }
 .repo-link svg { width: 12px; height: 12px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0 -52px; }
-.chip, .pr-more button { padding: 5px 10px; border: 0; border-radius: 7px; background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; transition: background-color .15s, box-shadow .15s, color .15s; }
-.chip { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-weight: 400; font-variant-numeric: tabular-nums; }
-.chip[hidden] { display: none; }
-.chip span { color: var(--ink); font-weight: 500; }
-.chip[aria-pressed="true"] { background: var(--ink); color: var(--page); box-shadow: inset 0 0 0 1px var(--ink); }
-.chip[aria-pressed="true"] span { color: inherit; }
-.chip:focus-visible { outline: 2px solid var(--series); outline-offset: 1px; }
-.chip-more { color: var(--ink); font-weight: 500; }
-@media (hover: hover) { .chip:not([aria-pressed="true"]):hover, .pr-more button:hover { box-shadow: inset 0 0 0 1px var(--ink-3); } }
-.chip-panel { margin-left: -52px; }
+.pr-more button { padding: 5px 10px; border: 0; border-radius: 7px; background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; transition: box-shadow .15s; }
+@media (hover: hover) { .pr-more button:hover { box-shadow: inset 0 0 0 1px var(--ink-3); } }
+/* Repos inside an org. */
+.subs { margin-left: -52px; }
+.sub { margin-top: 18px; }
+.sub-name { min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+a.sub-name:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+/* The full description, as in a closed row once it is opened. */
+.sub > .desc { white-space: normal; overflow-wrap: anywhere; }
+details.sub { margin-top: 0; border-top: 1px solid var(--line); }
+section.sub + details.sub { margin-top: 18px; }
+details.sub > summary { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 9px 0; cursor: pointer; list-style: none; }
+details.sub > summary::-webkit-details-marker { display: none; }
+details.sub > summary::before { content: ""; align-self: center; justify-self: center; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: rotate(-45deg); transition: transform .15s ease-out; }
+details.sub[open] > summary::before { transform: translateY(-1.5px) rotate(45deg); }
+details.sub > summary .repo-meta { white-space: nowrap; }
+.sub-body { padding: 0 0 12px 22px; }
+.sub-body .fold-top { margin-top: 2px; }
 .pr[hidden] { display: none; }
 .pr-more { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; font-size: 13px; }
 .pr-more button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; border-radius: 3px; }
@@ -585,7 +604,7 @@ const FORM_CSS = `
 @media (max-width: 640px) {
   .fold > details > summary { grid-template-columns: minmax(0, 1fr) 12px; }
   .fold > details > summary::after { grid-column: 2; grid-row: 1 / span 2; }
-  .fold .repo-meta { grid-column: 1; grid-row: 2; }
+  .fold > details > summary > .repo-meta { grid-column: 1; grid-row: 2; }
 }
 
 .checkbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -678,7 +697,7 @@ form[aria-busy="true"] .spin { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; border-right-color: currentColor; opacity: .5; }
-  .fold > details > summary::after { transition: none; }
+  .fold > details > summary::after, details.sub > summary::before { transition: none; }
   .meter .fill { transition: none; }
   .finder[data-state="searching"] .meter .fill { width: 100%; opacity: .4; animation: none; }
   .finder h1.who { animation: none; }
@@ -696,7 +715,7 @@ const busy = (form, user) => {
   input.readOnly = true;
   if (user) input.value = user;
 };
-// Repo chips: show one repo's PRs at a time.
+// Long PR lists: show more, or collapse.
 document.querySelector(".repos")?.addEventListener("click", (e) => {
   const control = e.target.closest(".pr-more button");
   if (control) {
@@ -707,7 +726,7 @@ document.querySelector(".repos")?.addEventListener("click", (e) => {
     const showLess = box.querySelector(".show-less");
     const collapsing = control === showLess;
     const before = rows.filter((r) => !r.hidden).length;
-    const count = collapsing ? limit : Math.min(rows.length, before + limit);
+    const count = collapsing ? Number(box.dataset.first) : Math.min(rows.length, before + limit);
     rows.forEach((row, i) => { row.hidden = i >= count; });
     const left = rows.length - count;
     showMore.textContent = "Show " + Math.min(left, limit) + " more";
@@ -720,21 +739,7 @@ document.querySelector(".repos")?.addEventListener("click", (e) => {
     } else {
       rows[before].querySelector("a").focus();
     }
-    return;
   }
-  const more = e.target.closest(".chip-more");
-  if (more) {
-    const revealed = [...more.parentElement.querySelectorAll(".chip[hidden]")];
-    revealed.forEach((chip) => { chip.hidden = false; });
-    more.remove();
-    revealed[0]?.focus();
-    return;
-  }
-  const chip = e.target.closest(".chip");
-  if (!chip) return;
-  const org = chip.closest(".org");
-  org.querySelectorAll(".chip:not(.chip-more)").forEach((c) => c.setAttribute("aria-pressed", c === chip));
-  org.querySelectorAll(".chip-panel").forEach((p) => { p.hidden = p.id !== chip.getAttribute("aria-controls"); });
 });
 // ?wait=1 is only how the page got here; keep it out of the address bar.
 if (new URLSearchParams(location.search).has("wait")) {
@@ -1146,7 +1151,7 @@ ${ogImage ? `<meta property="og:image:width" content="1200">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${esc(ogImage ?? profile.avatar_url)}">
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>
-<noscript><style>html .pr[hidden] { display: grid; } html .chip-panel[hidden] { display: block; } html .chip-panel::before { content: attr(data-name); display: block; margin-top: 16px; font-size: 14px; font-weight: 600; } html .chips, html .pr-more, html .sort-by, html .sort-menu, html .fold-all { display: none; } html .sort-head h2::after { content: none; }</style></noscript>`;
+<noscript><style>html .pr[hidden] { display: grid; } html .pr-more, html .sort-by, html .sort-menu, html .fold-all { display: none; } html .sort-head h2::after { content: none; }</style></noscript>`;
 
   const bar = check
     ? `  <div class="checkbar">
